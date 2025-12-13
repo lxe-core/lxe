@@ -9,40 +9,45 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-x86:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
-
-      - name: Build
-        run: cargo build --release --bin lxe --features packer
-
-      - name: Package
-        run: |
-          mkdir -p dist
-          cp target/release/lxe dist/lxe-x86_64-linux
-          chmod +x dist/lxe-x86_64-linux
-          tar -czvf lxe-x86_64-linux.tar.gz -C dist lxe-x86_64-linux
-
-      - name: Create release
-        uses: softprops/action-gh-release@v1
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+      - run: cargo build --release --bin lxe --features packer
+      - run: mv target/release/lxe lxe-x86_64-linux && tar -czvf lxe-x86_64-linux.tar.gz lxe-x86_64-linux
+      - uses: actions/upload-artifact@v4
         with:
-          files: lxe-x86_64-linux.tar.gz
-          generate_release_notes: false
+          name: x86_64
+          path: lxe-x86_64-linux.tar.gz
+
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+      - run: cargo build --release --bin lxe --features packer
+      - run: mv target/release/lxe lxe-aarch64-linux && tar -czvf lxe-aarch64-linux.tar.gz lxe-aarch64-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aarch64
+          path: lxe-aarch64-linux.tar.gz
+
+  release:
+    needs: [build-x86, build-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            x86_64/lxe-x86_64-linux.tar.gz
+            aarch64/lxe-aarch64-linux.tar.gz
           body: |
             ## Installation
-            
             ```bash
-            tar -xzf lxe-x86_64-linux.tar.gz
-            chmod +x lxe-x86_64-linux
-            sudo mv lxe-x86_64-linux /usr/local/bin/lxe
+            tar -xzf lxe-<arch>-linux.tar.gz
+            sudo mv lxe-<arch>-linux /usr/local/bin/lxe
             ```
