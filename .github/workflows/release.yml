@@ -26,13 +26,18 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+
       - name: Install cross-compilation tools
         run: |
           pip install ziglang cargo-zigbuild
           rustup target add ${{ matrix.target }}
 
       - name: Build
-        run: cargo zigbuild --release --target ${{ matrix.target }} --features packer
+        run: cargo zigbuild --release --target ${{ matrix.target }} --bin lxe --features packer
 
       - name: Package
         run: |
