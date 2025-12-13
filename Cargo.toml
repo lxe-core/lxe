@@ -1,11 +1,11 @@
 [package]
 name = "lxe"
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 description = "LXE - Linux Executable Environment: Modern self-extracting package format"
 authors = ["Arsh"]
 license = "MIT"
-repository = "https://github.com/arsh/lxe"
+repository = "https://github.com/lxe-core/lxe"
 keywords = ["linux", "package", "installer", "gtk4", "libadwaita"]
 categories = ["gui", "compression", "filesystem"]
 
