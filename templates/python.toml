@@ -1,0 +1,71 @@
+# LXE Configuration for Python Applications
+#
+# Packages a PyInstaller one-file executable
+#
+# Requirements:
+#   - PyInstaller installed: pip install pyinstaller
+#   - Your app builds with: pyinstaller --onefile main.py
+#
+# Usage:
+#   1. Copy to your Python project root as lxe.toml
+#   2. Update [package] with your app details
+#   3. Run: lxe build
+
+[package]
+name = "My Python App"
+id = "com.example.myapp"
+version = "1.0.0"
+executable = "main"  # Name of PyInstaller output
+icon = "icon.png"
+description = "A Python desktop application"
+categories = ["Utility"]
+terminal = false
+
+[build]
+input = "./dist"
+
+# Build script: 
+# 1. Creates venv if missing
+# 2. Installs dependencies
+# 3. Runs PyInstaller
+# 4. Copies output to dist folder
+script = """
+#!/bin/bash
+set -e
+
+# Clean
+rm -rf dist build && mkdir -p dist
+
+# Create venv if missing
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+
+source venv/bin/activate
+pip install -q pyinstaller
+
+# Install app dependencies
+if [ -f "requirements.txt" ]; then
+    pip install -q -r requirements.txt
+fi
+
+# Build with PyInstaller
+pyinstaller --onefile --name main --clean main.py --distpath dist
+
+# Copy icon if exists
+if [ -f "icon.png" ]; then
+    cp icon.png dist/
+elif [ -f "assets/icon.png" ]; then
+    cp assets/icon.png dist/icon.png
+fi
+
+echo "✅ Python app packaged"
+"""
+
+compression = 19
+
+[runtime]
+# path = "./lxe-runtime"
+
+[security]
+# key = "./lxe-signing.key"

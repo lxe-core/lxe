@@ -1,0 +1,21 @@
+target/
+**/*.rs.bk
+Cargo.lock
+.gemini/
+*.lxe
+*.key
+tmp/
+.vscode/
+start_Lxe.sh
+dist/
+examples/vscode/dist/
+examples/python/dist/
+examples/tauri/dist/
+lxe-signing.key
+debug.log
+
+
+# Large example artifacts
+**/VSCode-linux-x64/
+
+

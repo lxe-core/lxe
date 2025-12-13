@@ -1,0 +1,81 @@
+# LXE Configuration for Tauri 2.x Applications
+#
+# IMPORTANT: Tauri sidecars have specific requirements!
+# This template handles them correctly.
+#
+# Usage:
+#   1. Copy this file to your Tauri project root as lxe.toml
+#   2. Update [package] section with your app details
+#   3. Run: lxe build
+
+[package]
+# Your app info - MUST CHANGE THESE
+name = "My Tauri App"
+id = "com.example.myapp"
+version = "1.0.0"
+
+# Main executable (matches Cargo.toml binary name)
+executable = "my-app"
+
+# Icon - use your actual app icon
+icon = "icon.png"
+
+# Optional metadata
+description = "A cross-platform desktop application"
+categories = ["Utility"]
+terminal = false
+
+[build]
+input = "./dist"
+
+# Build script that correctly handles Tauri structure:
+# - Main binary from target/release
+# - Sidecars renamed WITHOUT target triple (critical!)
+# - Icon from src-tauri/icons
+#
+# CUSTOMIZE: Replace 'my-app' with your binary name
+#            Replace 'server' with your sidecar name (if any)
+script = """
+#!/bin/bash
+set -e
+
+# Clean and create dist folder
+rm -rf dist && mkdir -p dist
+
+# Copy main binary
+cp src-tauri/target/release/my-app dist/
+
+# Copy sidecar (if you have one)
+# CRITICAL: Name must be WITHOUT target triple!
+# Tauri looks for 'server', not 'server-x86_64-unknown-linux-gnu'
+if [ -f "src-tauri/binaries/server-x86_64-unknown-linux-gnu" ]; then
+    cp src-tauri/binaries/server-x86_64-unknown-linux-gnu dist/server
+    chmod +x dist/server
+    echo "✅ Sidecar copied as 'server'"
+fi
+
+# Copy icon (try multiple locations)
+for icon in src-tauri/icons/icon.png src-tauri/icons/128x128.png assets/icon.png; do
+    if [ -f "$icon" ]; then
+        cp "$icon" dist/icon.png
+        echo "✅ Icon copied from $icon"
+        break
+    fi
+done
+"""
+
+# High compression for smaller downloads
+compression = 19
+
+# Output file (optional, defaults to <app-id>.lxe)
+# output = "./my-app.lxe"
+
+[runtime]
+# LXE runtime path (relative to this file)
+# Leave commented to use system-installed lxe-runtime
+# path = "./lxe-runtime"
+
+[security]
+# Ed25519 signing key (optional but recommended)
+# Generate with: lxe key generate
+# key = "./lxe-signing.key"

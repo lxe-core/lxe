@@ -1,0 +1,253 @@
+/*
+ * LXE Installer - Adaptive Glass Stylesheet
+ *
+ * A modern, sleek aesthetic that inherits system themes while
+ * adding subtle glass effects and smooth animations.
+ *
+ * V7 FIX: Replaced GTK3-only functions (shade, lighter) with GTK4-compatible alternatives
+ */
+
+/* ============================================
+   WINDOW STYLING - Adaptive Glass Effect
+   ============================================ */
+
+.lxe-window {
+    background: alpha(@window_bg_color, 0.92);
+    border-radius: 16px;
+    border: 1px solid alpha(@borders, 0.2);
+    /* V7 FIX: Simplified box-shadow without inset (better GTK4 compatibility) */
+    box-shadow: 0 12px 48px alpha(black, 0.25);
+}
+
+/* Dark mode adjustments */
+.lxe-window:backdrop {
+    background: alpha(@window_bg_color, 0.95);
+    box-shadow: 0 8px 32px alpha(black, 0.2);
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+.title-1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.title-2 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.title-3 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.body {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.caption {
+    font-size: 12px;
+}
+
+.numeric {
+    font-feature-settings: "tnum" 1;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================
+   BUTTONS - Pill Shape with Hover Effects
+   ============================================ */
+
+.pill {
+    border-radius: 24px;
+    padding: 8px 24px;
+    font-weight: 600;
+    font-size: 15px;
+    transition: all 200ms ease;
+}
+
+.pill:hover {
+    /* V7 FIX: Removed transform (not well supported in GTK4 CSS) */
+    box-shadow: 0 4px 12px alpha(@accent_bg_color, 0.3);
+}
+
+.pill:active {
+    box-shadow: none;
+}
+
+/* Install button - prominent accent styling */
+/* V7 FIX: Replaced linear-gradient with shade() with solid color + alpha overlay */
+.install-button {
+    min-height: 44px;
+    font-size: 16px;
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    box-shadow: 0 4px 12px alpha(@accent_bg_color, 0.4);
+}
+
+.install-button:hover {
+    /* V7 FIX: Use alpha instead of lighter() */
+    background-color: mix(@accent_bg_color, white, 0.15);
+    box-shadow: 0 6px 16px alpha(@accent_bg_color, 0.5);
+}
+
+.install-button:active {
+    background-color: @accent_bg_color;
+    box-shadow: 0 2px 8px alpha(@accent_bg_color, 0.3);
+}
+
+/* ============================================
+   ACTION ROW BUTTONS (Maintenance Mode)
+   ============================================ */
+
+.action-row-button {
+    background: alpha(@card_bg_color, 0.5);
+    border: 1px solid alpha(@borders, 0.3);
+    border-radius: 12px;
+    padding: 4px;
+    transition: all 150ms ease;
+}
+
+.action-row-button:hover {
+    background: alpha(@card_bg_color, 0.8);
+    border-color: alpha(@borders, 0.5);
+}
+
+.action-row-button.suggested-action {
+    border-color: alpha(@accent_bg_color, 0.5);
+}
+
+.action-row-button.suggested-action:hover {
+    background: alpha(@accent_bg_color, 0.15);
+    border-color: @accent_bg_color;
+}
+
+.action-row-button.destructive-action {
+    border-color: alpha(@destructive_bg_color, 0.5);
+}
+
+.action-row-button.destructive-action:hover {
+    background: alpha(@destructive_bg_color, 0.15);
+    border-color: @destructive_bg_color;
+}
+
+/* ============================================
+   PROGRESS BAR - Smooth Animated
+   ============================================ */
+
+progressbar {
+    min-height: 8px;
+    border-radius: 4px;
+}
+
+progressbar trough {
+    background: alpha(@view_bg_color, 0.5);
+    border-radius: 4px;
+    min-height: 8px;
+}
+
+/* V7 FIX: Simplified progress bar without gradient containing lighter() */
+progressbar progress {
+    background-color: @accent_bg_color;
+    border-radius: 4px;
+    min-height: 8px;
+    transition: min-width 150ms ease-out;
+}
+
+/* ============================================
+   ICONS
+   ============================================ */
+
+.app-icon {
+    /* Icon styling - keeping compatible properties only */
+    opacity: 1;
+}
+
+.success-icon {
+    color: @success_color;
+}
+
+.success-icon.success {
+    color: #2ecc71;
+}
+
+/* ============================================
+   CAROUSEL INDICATORS
+   ============================================ */
+
+carouselindicatordots dot {
+    background: alpha(@view_fg_color, 0.3);
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 4px;
+    margin: 2px;
+    transition: all 200ms ease;
+}
+
+carouselindicatordots dot.active {
+    background: @accent_bg_color;
+    min-width: 24px;
+}
+
+/* ============================================
+   SPINNER
+   ============================================ */
+
+spinner {
+    color: @accent_bg_color;
+}
+
+/* ============================================
+   CLOSE BUTTON
+   ============================================ */
+
+.circular {
+    border-radius: 9999px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
+    transition: all 150ms ease;
+}
+
+.circular:hover {
+    background: alpha(@view_fg_color, 0.1);
+}
+
+.circular:active {
+    background: alpha(@view_fg_color, 0.2);
+}
+
+/* ============================================
+   ACCESSIBILITY - Reduced Motion
+   
+   V8 NOTE: GTK4 has limited @keyframes support,
+   so we rely on transition properties instead.
+   This media query still helps disable transitions
+   for users who prefer reduced motion.
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition-duration: 0ms;
+    }
+}
+
+/* ============================================
+   HIGH CONTRAST ADJUSTMENTS
+   ============================================ */
+
+@media (prefers-contrast: high) {
+    .lxe-window {
+        border: 2px solid @borders;
+        background: @window_bg_color;
+    }
+
+    .pill {
+        border: 2px solid currentColor;
+    }
+}

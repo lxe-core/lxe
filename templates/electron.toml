@@ -1,0 +1,63 @@
+# LXE Configuration for Electron Applications
+#
+# Packages an Electron app (from electron-builder output)
+#
+# Usage:
+#   1. Build your Electron app: npm run build
+#   2. Copy this to your project root as lxe.toml
+#   3. Update [package] with your app details
+#   4. Run: lxe build
+
+[package]
+name = "My Electron App"
+id = "com.example.myapp"
+version = "1.0.0"
+executable = "my-app"  # Name of your electron binary
+icon = "icon.png"
+description = "An Electron desktop application"
+categories = ["Utility"]
+terminal = false
+
+[build]
+input = "./dist"
+
+# Build script:
+# Copies the unpacked Electron distribution
+# NOTE: Electron apps are typically 150MB+ uncompressed
+script = """
+#!/bin/bash
+set -e
+
+# Clean
+rm -rf dist && mkdir -p dist
+
+# Path to electron-builder output (adjust if different)
+ELECTRON_DIR="release/linux-unpacked"
+
+if [ -d "$ELECTRON_DIR" ]; then
+    # Copy entire Electron bundle
+    cp -r "$ELECTRON_DIR"/* dist/
+    echo "✅ Electron app copied"
+else
+    echo "❌ Electron build not found at $ELECTRON_DIR"
+    echo "   Run 'npm run build' first"
+    exit 1
+fi
+
+# Copy icon
+for icon in build/icon.png assets/icon.png resources/icon.png; do
+    if [ -f "$icon" ]; then
+        cp "$icon" dist/icon.png
+        break
+    fi
+done
+"""
+
+# Lower compression for faster build (Electron apps are huge)
+compression = 10
+
+[runtime]
+# path = "./lxe-runtime"
+
+[security]
+# key = "./lxe-signing.key"

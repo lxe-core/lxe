@@ -1,0 +1,42 @@
+# LXE Package Configuration for Velocity Bridge
+# This is the declarative config that replaces 10+ command line flags
+
+[package]
+name = "Velocity Bridge"
+id = "com.trex099.velocity"
+version = "2.0.9"
+executable = "velocity_tauri"
+icon = "icon.png"
+description = "Copy on iPhone. Paste on Linux."
+categories = ["Utility", "Network"]
+terminal = false
+
+[build]
+# Clean distribution folder with ONLY the files we need
+input = "./dist"
+
+# Build script prepares the dist folder following AppImage structure:
+# 1. Main binary + sidecar MUST be in same directory
+# 2. Sidecar MUST be named just 'server' (no target triple)
+# 3. Correct icon from velocity/assets
+script = """
+rm -rf dist && mkdir -p dist && \
+cp src-tauri/target/release/velocity_tauri dist/ && \
+cp src-tauri/binaries/server-x86_64-unknown-linux-gnu dist/server && \
+chmod +x dist/server && \
+cp ../../velocity/assets/velocity-icon.png dist/icon.png
+"""
+
+# Maximum compression
+compression = 19
+
+# Output file
+output = "./velocity.lxe"
+
+[runtime]
+# Use the LXE runtime from the main project
+path = "../../target/release/lxe-runtime"
+
+[security]
+# Optional: signing key
+# key = "./lxe-signing.key"

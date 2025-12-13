@@ -1,0 +1,25 @@
+# LXE Configuration for Visual Studio Code
+# Packages the official Linux tarball distribution
+
+[package]
+name = "Visual Studio Code"
+id = "com.microsoft.vscode"
+version = "1.96.0"
+executable = "code"
+icon = "icon.png"
+description = "Code editing. Redefined."
+categories = ["Development", "IDE", "TextEditor"]
+terminal = false
+
+[build]
+input = "./dist"
+
+# Build script: copy VSCode + icon into dist folder
+script = """
+rm -rf dist && mkdir -p dist && \
+cp -r VSCode-linux-x64/* dist/ && \
+cp VSCode-linux-x64/resources/app/resources/linux/code.png dist/icon.png
+"""
+
+# Lower compression for large Electron apps (faster build)
+compression = 10
