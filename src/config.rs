@@ -51,7 +51,7 @@ pub struct PackageConfig {
 }
 
 /// Build configuration
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 pub struct BuildConfig {
     /// Directory containing files to package
     #[serde(default = "default_input")]
@@ -68,6 +68,17 @@ pub struct BuildConfig {
     /// Output file path (default: ./<name>.lxe)
     #[serde(default)]
     pub output: Option<String>,
+}
+
+impl Default for BuildConfig {
+    fn default() -> Self {
+        Self {
+            input: default_input(),
+            script: None,
+            compression: default_compression(),
+            output: None,
+        }
+    }
 }
 
 /// Runtime configuration
@@ -214,7 +225,7 @@ impl LxeConfig {
 /// Generate a template lxe.toml file
 pub fn generate_template(name: &str, executable: &str) -> String {
     format!(r#"# LXE Package Configuration
-# Documentation: https://github.com/example/lxe
+# Documentation: https://github.com/lxe-core/lxe
 
 [package]
 name = "{name}"

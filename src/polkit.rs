@@ -114,7 +114,7 @@ pub fn policy_file_content() -> &'static str {
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <policyconfig>
   <vendor>LXE</vendor>
-  <vendor_url>https://github.com/arsh/lxe</vendor_url>
+  <vendor_url>https://github.com/lxe-core/lxe</vendor_url>
   
   <action id="org.lxe.install.system">
     <description>Install application system-wide</description>
