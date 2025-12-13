@@ -12,6 +12,7 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
+use indicatif::{ProgressBar, ProgressStyle};
 
 // Import from the library crate
 use lxe::config::{LxeConfig, generate_template};
@@ -27,10 +28,18 @@ const LXE_MAGIC: &[u8; 8] = b"\x00LXE\xF0\x9F\x93\x01";
 
 #[derive(Parser)]
 #[command(name = "lxe")]
-#[command(version = "0.2.0")]
+#[command(version = "2.0.0")]
 #[command(about = "LXE - The Universal Linux Package Builder")]
 #[command(author = "LXE Project")]
 struct Cli {
+    /// Suppress all output except errors
+    #[arg(short, long, global = true)]
+    silent: bool,
+
+    /// Verbose output
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -46,10 +55,6 @@ enum Commands {
         /// Skip running the build script
         #[arg(long)]
         no_script: bool,
-        
-        /// Verbose output
-        #[arg(short, long)]
-        verbose: bool,
     },
     
     /// Create a template lxe.toml in current directory
@@ -78,6 +83,27 @@ enum Commands {
         /// Path to .lxe file
         file: PathBuf,
     },
+
+    /// Uninstall an LXE application
+    Uninstall {
+        /// App ID to uninstall (e.g., com.example.app)
+        id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+
+        /// Uninstall system-wide installation (requires privileges)
+        #[arg(long)]
+        system: bool,
+    },
+
+    /// Update the LXE tool itself
+    SelfUpdate {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -90,30 +116,103 @@ enum KeyAction {
     },
 }
 
+// Console helper for output control
+struct Console {
+    silent: bool,
+    verbose: bool,
+}
+
+impl Console {
+    fn new(silent: bool, verbose: bool) -> Self {
+        Self { silent, verbose }
+    }
+
+    fn log(&self, msg: impl std::fmt::Display) {
+        if !self.silent {
+            println!("{}", msg);
+        }
+    }
+
+    fn verbose(&self, msg: impl std::fmt::Display) {
+        if self.verbose && !self.silent {
+            println!("  {}", msg);
+        }
+    }
+
+    fn success(&self, msg: impl std::fmt::Display) {
+        if !self.silent {
+            println!("✅ {}", msg);
+        }
+    }
+
+    fn warn(&self, msg: impl std::fmt::Display) {
+        if !self.silent {
+            eprintln!("⚠️  {}", msg);
+        }
+    }
+
+    fn error(&self, msg: impl std::fmt::Display) {
+        eprintln!("❌ {}", msg); // Always print errors
+    }
+
+    fn progress_bar(&self, len: u64) -> Option<ProgressBar> {
+        if self.silent {
+            None
+        } else {
+            let pb = ProgressBar::new(len);
+            pb.set_style(ProgressStyle::with_template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}"
+            ).unwrap().progress_chars("=>-"));
+            Some(pb)
+        }
+    }
+
+    fn spinner(&self, msg: &str) -> Option<ProgressBar> {
+        if self.silent {
+            None
+        } else {
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(ProgressStyle::with_template(
+                "{spinner:.green} [{elapsed_precise}] {msg}"
+            ).unwrap());
+            pb.set_message(msg.to_string());
+            pb.enable_steady_tick(std::time::Duration::from_millis(100));
+            Some(pb)
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let console = Console::new(cli.silent, cli.verbose);
     
     match cli.command {
-        Commands::Build { config, no_script, verbose } => {
-            cmd_build(config, no_script, verbose)
+        Commands::Build { config, no_script } => {
+            cmd_build(config, no_script, &console)
         }
         Commands::Init { preset, name, executable } => {
-            cmd_init(preset.as_deref(), &name, &executable)
+            cmd_init(preset.as_deref(), &name, &executable, &console)
         }
         Commands::Key { action } => {
             match action {
-                KeyAction::Generate { output } => cmd_key_generate(&output),
+                KeyAction::Generate { output } => cmd_key_generate(&output, &console),
             }
         }
         Commands::Verify { file } => {
-            cmd_verify(&file)
+            cmd_verify(&file, &console)
+        }
+        Commands::Uninstall { id, yes, system } => {
+            cmd_uninstall(&id, yes, system, &console)
+        }
+        Commands::SelfUpdate { check } => {
+            cmd_self_update(check, &console)
         }
     }
 }
 
 /// Build an LXE package
-fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Result<()> {
-    println!("🔧 LXE Builder v0.2.0\n");
+fn cmd_build(config_path: Option<PathBuf>, no_script: bool, console: &Console) -> Result<()> {
+    console.log("🔧 LXE Builder v2.0.0\n");
     
     // Load configuration
     let base_dir = std::env::current_dir()?;
@@ -130,15 +229,15 @@ fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Re
         config.validate(&base_dir)?;
     }
     
-    println!("📦 Package: {} v{}", config.package.name, config.package.version);
-    println!("   App ID: {}", config.package.id);
+    console.log(format!("📦 Package: {} v{}", config.package.name, config.package.version));
+    console.log(format!("   App ID: {}", config.package.id));
     
     // Run build script if specified
     if let Some(ref script) = config.build.script {
         if no_script {
-            println!("   ⏭️  Skipping build script (--no-script)");
+            console.log("   ⏭️  Skipping build script (--no-script)");
         } else {
-            println!("\n🔨 Running build script: {}", script);
+            console.log(format!("\n🔨 Running build script: {}", script));
             
             let status = Command::new("sh")
                 .arg("-c")
@@ -151,7 +250,7 @@ fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Re
                 anyhow::bail!("Build script failed with exit code: {:?}", status.code());
             }
             
-            println!("   ✓ Build script completed successfully");
+            console.log("   ✓ Build script completed successfully");
             
             // Validate now that input should exist
             config.validate(&base_dir)?;
@@ -161,8 +260,8 @@ fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Re
     let input_path = config.input_path(&base_dir);
     let output_path = config.output_path(&base_dir);
     
-    println!("\n📁 Input: {}", input_path.display());
-    println!("📄 Output: {}", output_path.display());
+    console.log(format!("\n📁 Input: {}", input_path.display()));
+    console.log(format!("📄 Output: {}", output_path.display()));
     
     // Check executable exists in input
     let exec_path = input_path.join(&config.package.executable);
@@ -177,23 +276,25 @@ fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Re
     }
     
     // Create tar archive
-    println!("\n📁 Creating archive...");
+    console.log("\n📁 Creating archive...");
     let tar_data = create_tar_archive(&input_path)?;
-    println!("   Uncompressed: {} bytes ({:.1} MB)", 
+    console.log(format!("   Uncompressed: {} bytes ({:.1} MB)", 
              tar_data.len(), 
-             tar_data.len() as f64 / 1024.0 / 1024.0);
+             tar_data.len() as f64 / 1024.0 / 1024.0));
     
-    // Compress with zstd
-    println!("🗜️  Compressing (level {})...", config.build.compression);
+    // Compress with zstd (with spinner)
+    let spinner = console.spinner(&format!("Compressing (level {})...", config.build.compression));
     let compressed = compress_zstd(&tar_data, config.build.compression)?;
     let ratio = tar_data.len() as f64 / compressed.len() as f64;
-    println!("   Compressed: {} bytes ({:.1}x ratio)", compressed.len(), ratio);
+    if let Some(pb) = spinner {
+        pb.finish_with_message(format!("Compressed: {} bytes ({:.1}x ratio)", compressed.len(), ratio));
+    } else {
+        console.log(format!("   Compressed: {} bytes ({:.1}x ratio)", compressed.len(), ratio));
+    }
     
     // Calculate checksum
     let checksum = calculate_sha256(&compressed);
-    if verbose {
-        println!("   SHA256: {}", checksum);
-    }
+    console.verbose(format!("SHA256: {}", checksum));
     
     // Build metadata JSON
     let categories: Vec<String> = config.package.categories.clone();
@@ -215,26 +316,26 @@ fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Re
     // Sign if key provided
     if let Some(key_path) = config.key_path(&base_dir) {
         if key_path.exists() {
-            println!("🔏 Signing package...");
+            console.log("🔏 Signing package...");
             sign_metadata(&mut metadata, &key_path, &checksum)?;
-            println!("   ✓ Package signed");
+            console.log("   ✓ Package signed");
         } else {
-            println!("   ⚠️  Key file not found: {}", key_path.display());
+            console.warn(format!("Key file not found: {}", key_path.display()));
         }
     }
     
     let metadata_json = serde_json::to_vec(&metadata)?;
-    println!("   Metadata: {} bytes", metadata_json.len());
+    console.verbose(format!("Metadata: {} bytes", metadata_json.len()));
     
     // Get runtime binary
-    println!("🔗 Preparing runtime...");
+    console.log("🔗 Preparing runtime...");
     let runtime_data = get_runtime_binary(&config.runtime_path(&base_dir))?;
-    println!("   Runtime: {} bytes ({:.1} MB)", 
+    console.log(format!("   Runtime: {} bytes ({:.1} MB)", 
              runtime_data.len(),
-             runtime_data.len() as f64 / 1024.0 / 1024.0);
+             runtime_data.len() as f64 / 1024.0 / 1024.0));
     
     // Assemble final package
-    println!("🔨 Assembling package...");
+    console.log("🔨 Assembling package...");
     let mut output_file = File::create(&output_path)?;
     
     // [Runtime Binary]
@@ -275,23 +376,23 @@ fn cmd_build(config_path: Option<PathBuf>, no_script: bool, verbose: bool) -> Re
     
     let total_size = fs::metadata(&output_path)?.len();
     
-    println!("\n✅ Package created successfully!");
-    println!("   📄 {}", output_path.display());
-    println!("   📊 {} bytes ({:.2} MB)", total_size, total_size as f64 / 1024.0 / 1024.0);
+    console.success("Package created successfully!");
+    console.log(format!("   📄 {}", output_path.display()));
+    console.log(format!("   📊 {} bytes ({:.2} MB)", total_size, total_size as f64 / 1024.0 / 1024.0));
     
     if metadata.get("signature").is_some() {
-        println!("   🔐 Signed: Yes");
+        console.log("   🔐 Signed: Yes");
     } else {
-        println!("   🔐 Signed: No");
+        console.log("   🔐 Signed: No");
     }
     
-    println!("\n💡 To install: ./{}", output_path.file_name().unwrap().to_string_lossy());
+    console.log(format!("\n💡 To install: ./{}", output_path.file_name().unwrap().to_string_lossy()));
     
     Ok(())
 }
 
 /// Create template lxe.toml
-fn cmd_init(preset: Option<&str>, name: &str, executable: &str) -> Result<()> {
+fn cmd_init(preset: Option<&str>, name: &str, executable: &str, console: &Console) -> Result<()> {
     let config_path = std::env::current_dir()?.join("lxe.toml");
     
     if config_path.exists() {
@@ -314,21 +415,21 @@ fn cmd_init(preset: Option<&str>, name: &str, executable: &str) -> Result<()> {
     
     fs::write(&config_path, &template)?;
     
-    println!("✅ Created lxe.toml");
+    console.success("Created lxe.toml");
     
     if let Some(p) = preset {
-        println!("   Using preset: {}", p);
+        console.log(format!("   Using preset: {}", p));
     }
     
-    println!("\nNext steps:");
+    console.log("\nNext steps:");
     if preset == Some("tauri") {
-        println!("  1. Update [package] section with your app details");
-        println!("  2. Replace 'my-app' with your binary name in the build script");
-        println!("  3. Run: npm run tauri build && lxe build");
+        console.log("  1. Update [package] section with your app details");
+        console.log("  2. Replace 'my-app' with your binary name in the build script");
+        console.log("  3. Run: npm run tauri build && lxe build");
     } else {
-        println!("  1. Edit lxe.toml with your app details");
-        println!("  2. Put your app files in ./dist/");
-        println!("  3. Run: lxe build");
+        console.log("  1. Edit lxe.toml with your app details");
+        console.log("  2. Put your app files in ./dist/");
+        console.log("  3. Run: lxe build");
     }
     
     Ok(())
@@ -423,12 +524,12 @@ compression = 10
 "#;
 
 /// Generate signing keypair
-fn cmd_key_generate(output: &PathBuf) -> Result<()> {
+fn cmd_key_generate(output: &PathBuf, console: &Console) -> Result<()> {
     if output.exists() {
         anyhow::bail!("Key file already exists: {}", output.display());
     }
     
-    println!("🔑 Generating Ed25519 keypair...");
+    console.log("🔑 Generating Ed25519 keypair...");
     
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
@@ -449,17 +550,17 @@ fn cmd_key_generate(output: &PathBuf) -> Result<()> {
         std::fs::set_permissions(output, perms)?;
     }
     
-    println!("\n✅ Keypair generated!");
-    println!("   🔒 Private key: {}", output.display());
-    println!("   🔓 Public key: {}", BASE64_STANDARD.encode(verifying_key.as_bytes()));
-    println!("\n⚠️  Keep your private key secure and never commit it to git!");
+    console.success("Keypair generated!");
+    console.log(format!("   🔒 Private key: {}", output.display()));
+    console.log(format!("   🔓 Public key: {}", BASE64_STANDARD.encode(verifying_key.as_bytes())));
+    console.warn("Keep your private key secure and never commit it to git!");
     
     Ok(())
 }
 
 /// Verify package signature
-fn cmd_verify(file: &PathBuf) -> Result<()> {
-    println!("🔍 Verifying: {}\n", file.display());
+fn cmd_verify(file: &PathBuf, console: &Console) -> Result<()> {
+    console.log(format!("🔍 Verifying: {}\n", file.display()));
     
     // Step 1: Read the package metadata
     let payload_info = lxe::payload::read_payload_info(file)
@@ -468,11 +569,11 @@ fn cmd_verify(file: &PathBuf) -> Result<()> {
     let metadata = &payload_info.metadata;
     
     // Display package info
-    println!("📦 Package Information");
-    println!("   Name: {}", metadata.name);
-    println!("   Version: {}", metadata.version);
-    println!("   App ID: {}", metadata.app_id);
-    println!();
+    console.log("📦 Package Information");
+    console.log(format!("   Name: {}", metadata.name));
+    console.log(format!("   Version: {}", metadata.version));
+    console.log(format!("   App ID: {}", metadata.app_id));
+    console.log("");
     
     // Step 2: Check if package is signed
     let (has_signature, has_public_key) = (
@@ -481,9 +582,9 @@ fn cmd_verify(file: &PathBuf) -> Result<()> {
     );
     
     if !has_signature && !has_public_key {
-        println!("⚠️  Package is UNSIGNED");
-        println!("   This package was not signed by the publisher.");
-        println!("   Only install if you trust the source.");
+        console.warn("Package is UNSIGNED");
+        console.log("   This package was not signed by the publisher.");
+        console.log("   Only install if you trust the source.");
         return Ok(());
     }
     
@@ -499,13 +600,13 @@ fn cmd_verify(file: &PathBuf) -> Result<()> {
     let public_key = metadata.public_key.as_ref().unwrap();
     let signature = metadata.signature.as_ref().unwrap();
     
-    println!("🔑 Signature Information");
-    println!("   Public Key: {}...", &public_key[..20.min(public_key.len())]);
-    println!("   Signature: {}...", &signature[..20.min(signature.len())]);
-    println!();
+    console.log("🔑 Signature Information");
+    console.log(format!("   Public Key: {}...", &public_key[..20.min(public_key.len())]));
+    console.log(format!("   Signature: {}...", &signature[..20.min(signature.len())]));
+    console.log("");
     
     // Step 4: Verify the signature
-    println!("🔐 Verifying Signature...");
+    console.log("🔐 Verifying Signature...");
     
     // Get the signable data (metadata without sig fields + checksum)
     let signable_json = metadata.to_signable_json()
@@ -518,23 +619,113 @@ fn cmd_verify(file: &PathBuf) -> Result<()> {
         .context("Failed to verify signature")?;
     
     if is_valid {
-        println!("   ✅ Signature is VALID");
-        println!();
-        println!("📊 Payload Integrity");
-        println!("   Checksum: {}...", &metadata.payload_checksum[..16.min(metadata.payload_checksum.len())]);
-        println!("   Status: Verified by signature");
-        println!();
-        println!("✅ Package is authentic and signed by the publisher.");
-        println!("   Public key: {}", public_key);
+        console.log("   ✅ Signature is VALID");
+        console.log("");
+        console.log("📊 Payload Integrity");
+        console.log(format!("   Checksum: {}...", &metadata.payload_checksum[..16.min(metadata.payload_checksum.len())]));
+        console.log("   Status: Verified by signature");
+        console.log("");
+        console.success("Package is authentic and signed by the publisher.");
+        console.log(format!("   Public key: {}", public_key));
     } else {
-        println!("   ❌ Signature is INVALID");
-        println!();
-        println!("🚨 SECURITY WARNING");
-        println!("   This package may have been tampered with!");
-        println!("   The signature does not match the package contents.");
-        println!("   DO NOT INSTALL this package.");
+        console.error("Signature is INVALID");
+        console.log("");
+        console.error("SECURITY WARNING");
+        console.log("   This package may have been tampered with!");
+        console.log("   The signature does not match the package contents.");
+        console.log("   DO NOT INSTALL this package.");
         anyhow::bail!("Signature verification failed");
     }
+    
+    Ok(())
+}
+
+/// Uninstall an LXE application
+fn cmd_uninstall(app_id: &str, yes: bool, system: bool, console: &Console) -> Result<()> {
+    console.log(format!("🧹 Uninstalling: {}\n", app_id));
+    
+    // Build config based on install type
+    let config = if system {
+        console.log("   Mode: System-wide");
+        lxe::installer::InstallConfig::system()
+    } else {
+        console.log("   Mode: User-local");
+        lxe::installer::InstallConfig::user_local()
+    };
+    
+    // Check if installed
+    let app_dir = config.app_dir(app_id);
+    if !app_dir.exists() {
+        anyhow::bail!("Application not found: {}\n\nNo installation found at: {:?}", app_id, app_dir);
+    }
+    
+    console.log(format!("   Found: {:?}", app_dir));
+    
+    // Confirmation prompt (unless --yes or --silent)
+    if !yes && !console.silent {
+        print!("\n⚠️  Are you sure you want to uninstall {}? [y/N] ", app_id);
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            console.log("\nCancelled.");
+            return Ok(());
+        }
+    }
+    
+    // Execute uninstall (async runtime needed)
+    console.log("\nRemoving files...");
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(lxe::installer::uninstall(app_id, &config))?;
+    
+    console.success(format!("{} has been uninstalled.", app_id));
+    Ok(())
+}
+
+/// Self-update the LXE tool
+fn cmd_self_update(check_only: bool, console: &Console) -> Result<()> {
+    use self_update::cargo_crate_version;
+    
+    console.log("🔄 Checking for updates...\n");
+    console.log(format!("   Current version: v{}", cargo_crate_version!()));
+    
+    let releases = self_update::backends::github::ReleaseList::configure()
+        .repo_owner("lxe-core")
+        .repo_name("lxe")
+        .build()?
+        .fetch()?;
+    
+    if releases.is_empty() {
+        console.log("   No releases found on GitHub.");
+        return Ok(());
+    }
+    
+    let latest = &releases[0];
+    console.log(format!("   Latest version: v{}", latest.version));
+    
+    if latest.version == cargo_crate_version!() {
+        console.success("You are running the latest version.");
+        return Ok(());
+    }
+    
+    if check_only {
+        console.log(format!("\n💡 Run `lxe self-update` to install v{}", latest.version));
+        return Ok(());
+    }
+    
+    console.log("\n📦 Downloading update...");
+    
+    let status = self_update::backends::github::Update::configure()
+        .repo_owner("lxe-core")
+        .repo_name("lxe")
+        .bin_name("lxe")
+        .show_download_progress(!console.silent)
+        .current_version(cargo_crate_version!())
+        .build()?
+        .update()?;
+    
+    console.success(format!("Updated to v{}!", status.version()));
+    console.log("\n🎉 Please restart the terminal to use the new version.");
     
     Ok(())
 }

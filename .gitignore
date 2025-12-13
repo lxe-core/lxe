@@ -18,4 +18,9 @@ debug.log
 # Large example artifacts
 **/VSCode-linux-x64/
 
+# Docs and Agent files
+docs/
+prompt.txt
+
+
 

@@ -12,3 +12,8 @@ pub mod paths;
 pub mod signing;
 pub mod config;
 pub mod payload;
+pub mod extractor;
+pub mod polkit;
+pub mod installer;
+
+

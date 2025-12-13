@@ -79,6 +79,16 @@ tar = "0.4"
 # Async channels for progress reporting
 tokio-stream = "0.1"
 
+# Terminal UI (progress bars)
+indicatif = "0.17"
+
+# Auto-updates
+self_update = { version = "0.39", default-features = false, features = [
+    "archive-tar",
+    "compression-flate2",
+    "rustls"
+] }
+
 [features]
 default = []
 packer = ["zstd"]
