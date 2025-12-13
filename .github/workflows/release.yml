@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install cross-compilation tools
+        run: |
+          pip install ziglang cargo-zigbuild
+          rustup target add ${{ matrix.target }}
+
+      - name: Build
+        run: cargo zigbuild --release --target ${{ matrix.target }} --features packer
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/lxe dist/lxe-${{ matrix.target }}
+          chmod +x dist/lxe-${{ matrix.target }}
+          tar -czvf lxe-${{ matrix.target }}.tar.gz -C dist lxe-${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lxe-${{ matrix.target }}
+          path: lxe-${{ matrix.target }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            lxe-x86_64-unknown-linux-gnu/lxe-x86_64-unknown-linux-gnu.tar.gz
+            lxe-aarch64-unknown-linux-gnu/lxe-aarch64-unknown-linux-gnu.tar.gz
+          generate_release_notes: false
+          body: |
+            ## Installation
+            
+            Download the appropriate archive for your architecture and extract:
+            ```bash
+            tar -xzf lxe-<arch>.tar.gz
+            chmod +x lxe-<arch>
+            sudo mv lxe-<arch> /usr/local/bin/lxe
+            ```
