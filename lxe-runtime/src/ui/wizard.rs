@@ -95,6 +95,7 @@ impl WizardStack {
             .allow_scroll_wheel(false)
             .allow_mouse_drag(false)
             .vexpand(true)
+            .hexpand(true)
             .build();
         
         // Create carousel indicator dots
@@ -171,7 +172,14 @@ impl WizardStack {
                 false,
                 glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
                     carousel.scroll_to(&progress_page, true);
-                    progress_page.start_installation();
+                    
+                    // Delay start to allow transition to complete/start smoothly
+                    let page = progress_page.clone();
+                    glib::timeout_add_local(std::time::Duration::from_millis(600), move || {
+                        page.start_installation();
+                        glib::ControlFlow::Break
+                    });
+                    
                     None
                 }),
             );
@@ -192,7 +200,14 @@ impl WizardStack {
                 false,
                 glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
                     carousel.scroll_to(&progress_page, true);
-                    progress_page.start_installation();
+                    
+                    // Delay start to allow transition to complete/start smoothly
+                    let page = progress_page.clone();
+                    glib::timeout_add_local(std::time::Duration::from_millis(600), move || {
+                        page.start_installation();
+                        glib::ControlFlow::Break
+                    });
+                    
                     None
                 }),
             );
