@@ -7,8 +7,11 @@ mod welcome;
 mod progress;
 mod complete;
 mod maintenance;
+mod license;
 
 pub use welcome::WelcomePage;
 pub use progress::ProgressPage;
 pub use complete::CompletePage;
 pub use maintenance::MaintenancePage;
+pub use license::LicensePage;
+

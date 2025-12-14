@@ -1,6 +1,7 @@
 target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock (Should be tracked for workspace)
+# Cargo.lock
 .gemini/
 *.lxe
 *.key
@@ -18,9 +19,13 @@ debug.log
 # Large example artifacts
 **/VSCode-linux-x64/
 
-# Docs and Agent files
+# Local Agent Files (Do Not Commit)
 docs/
 prompt.txt
+PROJECT_STATE.md
+ARCHITECTURE.md
+WHAT_TO_DO.md
 
-
-
+# Build Artifacts
+examples/**/lxe-runtime
+examples/**/vscode.lxe

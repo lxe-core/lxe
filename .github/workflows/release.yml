@@ -9,45 +9,121 @@ permissions:
   contents: write
 
 jobs:
-  build-x86:
+  # ─────────────────────────────────────────────────────────────
+  # CLI BUILD - NO GTK4 REQUIRED!
+  # ─────────────────────────────────────────────────────────────
+  build-cli-x86:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # NO apt install libgtk-4-dev needed!
+      - run: cargo build --release -p lxe-cli
+      - run: mv target/release/lxe lxe-x86_64-linux
+      - run: tar -czvf lxe-x86_64-linux.tar.gz lxe-x86_64-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-x86_64
+          path: lxe-x86_64-linux.tar.gz
+
+  build-cli-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # NO apt install libgtk-4-dev needed!
+      - run: cargo build --release -p lxe-cli
+      - run: mv target/release/lxe lxe-aarch64-linux
+      - run: tar -czvf lxe-aarch64-linux.tar.gz lxe-aarch64-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-aarch64
+          path: lxe-aarch64-linux.tar.gz
+
+  # ─────────────────────────────────────────────────────────────
+  # MUSL STATIC BUILD - Runs on ANY Linux!
+  # ─────────────────────────────────────────────────────────────
+  build-cli-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: sudo apt-get install -y musl-tools
+      - run: cargo build --release -p lxe-cli --target x86_64-unknown-linux-musl
+      - run: mv target/x86_64-unknown-linux-musl/release/lxe lxe-x86_64-linux-musl
+      - run: tar -czvf lxe-x86_64-linux-musl.tar.gz lxe-x86_64-linux-musl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-musl
+          path: lxe-x86_64-linux-musl.tar.gz
+
+  # ─────────────────────────────────────────────────────────────
+  # RUNTIME BUILD - GTK4 Required (for installer wizard)
+  # ─────────────────────────────────────────────────────────────
+  build-runtime-x86:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
-      - run: cargo build --release --bin lxe --features packer
-      - run: mv target/release/lxe lxe-x86_64-linux && tar -czvf lxe-x86_64-linux.tar.gz lxe-x86_64-linux
+      - run: cargo build --release -p lxe-runtime
+      - run: mv target/release/lxe-runtime lxe-runtime-x86_64-linux
+      - run: tar -czvf lxe-runtime-x86_64-linux.tar.gz lxe-runtime-x86_64-linux
       - uses: actions/upload-artifact@v4
         with:
-          name: x86_64
-          path: lxe-x86_64-linux.tar.gz
+          name: runtime-x86_64
+          path: lxe-runtime-x86_64-linux.tar.gz
 
-  build-arm64:
+  build-runtime-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
-      - run: cargo build --release --bin lxe --features packer
-      - run: mv target/release/lxe lxe-aarch64-linux && tar -czvf lxe-aarch64-linux.tar.gz lxe-aarch64-linux
+      - run: cargo build --release -p lxe-runtime
+      - run: mv target/release/lxe-runtime lxe-runtime-aarch64-linux
+      - run: tar -czvf lxe-runtime-aarch64-linux.tar.gz lxe-runtime-aarch64-linux
       - uses: actions/upload-artifact@v4
         with:
-          name: aarch64
-          path: lxe-aarch64-linux.tar.gz
+          name: runtime-aarch64
+          path: lxe-runtime-aarch64-linux.tar.gz
 
+  # ─────────────────────────────────────────────────────────────
+  # RELEASE - Upload all artifacts
+  # ─────────────────────────────────────────────────────────────
   release:
-    needs: [build-x86, build-arm64]
+    needs: [build-cli-x86, build-cli-arm64, build-cli-musl, build-runtime-x86, build-runtime-arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
       - uses: softprops/action-gh-release@v1
         with:
           files: |
-            x86_64/lxe-x86_64-linux.tar.gz
-            aarch64/lxe-aarch64-linux.tar.gz
+            cli-x86_64/lxe-x86_64-linux.tar.gz
+            cli-aarch64/lxe-aarch64-linux.tar.gz
+            cli-musl/lxe-x86_64-linux-musl.tar.gz
+            runtime-x86_64/lxe-runtime-x86_64-linux.tar.gz
+            runtime-aarch64/lxe-runtime-aarch64-linux.tar.gz
           body: |
-            ## Installation
+            ## LXE ${{ github.ref_name }}
+            
+            ### 📦 CLI Tool (for developers - NO GTK4 required!)
             ```bash
-            tar -xzf lxe-<arch>-linux.tar.gz
-            sudo mv lxe-<arch>-linux /usr/local/bin/lxe
+            # Standard glibc build
+            curl -fsSL https://github.com/lxe-core/lxe/releases/latest/download/lxe-x86_64-linux.tar.gz | tar -xz
+            
+            # Static musl build (works on ANY Linux, including Alpine)
+            curl -fsSL https://github.com/lxe-core/lxe/releases/latest/download/lxe-x86_64-linux-musl.tar.gz | tar -xz
+            
+            sudo mv lxe-*-linux /usr/local/bin/lxe
             ```
+            
+            Or use the install script:
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/lxe-core/lxe/main/install.sh | bash
+            ```
+            
+            ### 🖥️ Runtime (bundled automatically in .lxe packages)
+            The runtime is embedded in .lxe packages. Only needed if building packages manually.

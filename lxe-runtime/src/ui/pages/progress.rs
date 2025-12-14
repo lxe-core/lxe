@@ -277,8 +277,18 @@ impl ProgressPage {
                         // Extraction successful, now install desktop files
                         let _ = sender.send(ProgressMessage::InstallingDesktopEntry);
                         
+                        // Install runtime binary for uninstall support
+                        let runtime_path = match installer::install_runtime_to_bin(&config).await {
+                            Ok(path) => path,
+                            Err(e) => {
+                                tracing::warn!("Could not install runtime: {}", e);
+                                // Fallback to current exe
+                                std::env::current_exe().unwrap_or_default()
+                            }
+                        };
+                        
                         // Create .desktop file
-                        if let Err(e) = installer::create_desktop_entry(&payload.metadata, &config).await {
+                        if let Err(e) = installer::create_desktop_entry(&payload.metadata, &config, &runtime_path).await {
                             let _ = sender.send(ProgressMessage::Error(e.to_string()));
                             return;
                         }

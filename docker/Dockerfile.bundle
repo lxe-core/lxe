@@ -1,0 +1,43 @@
+# LXE Runtime Bundler
+# Builds lxe-runtime with bundled glibc and GTK4 libraries
+# Based on Debian Bullseye for maximum compatibility (glibc 2.31)
+
+FROM debian:bullseye-slim
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    pkg-config \
+    libssl-dev \
+    # GTK4 and Libadwaita dependencies
+    libgtk-4-dev \
+    libadwaita-1-dev \
+    # D-Bus for Polkit
+    libdbus-1-dev \
+    # For patching binaries
+    patchelf \
+    # For finding dependencies
+    binutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Set working directory
+WORKDIR /build
+
+# Copy source code (mounted at runtime)
+# Usage: docker run -v $(pwd):/build lxe-bundler
+
+# Build script that:
+# 1. Compiles lxe-runtime
+# 2. Extracts all .so dependencies
+# 3. Bundles them into a libs/ directory
+# 4. Patches the binary RPATH
+
+COPY scripts/bundle-libs.sh /usr/local/bin/bundle-libs.sh
+RUN chmod +x /usr/local/bin/bundle-libs.sh
+
+ENTRYPOINT ["/usr/local/bin/bundle-libs.sh"]

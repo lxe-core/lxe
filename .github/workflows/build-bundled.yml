@@ -1,0 +1,117 @@
+name: Build Bundled Runtime
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-bundled-runtime:
+    name: Build Portable Runtime
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build bundler Docker image
+        run: |
+          docker build -t lxe-bundler -f docker/Dockerfile.bundle .
+      
+      - name: Build bundled runtime in container
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/build \
+            -e BUILD_DIR=/build \
+            -e OUTPUT_DIR=/build/bundled \
+            lxe-bundler
+      
+      - name: List bundled output
+        run: |
+          ls -la bundled/
+          ls -la bundled/libs/ || echo "No libs directory"
+          echo "---"
+          echo "Bundle size: $(du -sh bundled/ | cut -f1)"
+      
+      - name: Upload bundled runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lxe-runtime-bundled-${{ github.sha }}
+          path: bundled/
+          retention-days: 7
+
+  build-cli:
+    name: Build Static CLI
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust (musl target)
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      
+      - name: Build static CLI
+        run: |
+          cargo build --release --target x86_64-unknown-linux-musl -p lxe-cli
+      
+      - name: Verify static binary
+        run: |
+          file target/x86_64-unknown-linux-musl/release/lxe
+          ldd target/x86_64-unknown-linux-musl/release/lxe || echo "Static binary (no dynamic deps)"
+      
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lxe-cli-static-${{ github.sha }}
+          path: target/x86_64-unknown-linux-musl/release/lxe
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: [build-bundled-runtime, build-cli]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download CLI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lxe-cli-static-${{ github.sha }}
+          path: release/
+      
+      - name: Download bundled runtime artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lxe-runtime-bundled-${{ github.sha }}
+          path: release/bundled/
+      
+      - name: Create release tarball
+        run: |
+          cd release
+          chmod +x lxe bundled/lxe-runtime bundled/run-lxe-runtime.sh
+          tar -czvf lxe-${{ github.ref_name }}-x86_64-linux.tar.gz lxe
+          tar -czvf lxe-runtime-bundled-${{ github.ref_name }}-x86_64-linux.tar.gz bundled/
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/lxe-${{ github.ref_name }}-x86_64-linux.tar.gz
+            release/lxe-runtime-bundled-${{ github.ref_name }}-x86_64-linux.tar.gz
+          generate_release_notes: true

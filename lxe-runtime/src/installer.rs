@@ -4,9 +4,9 @@
 //! V5 FIX: Now includes polkit integration for system installs.
 
 use crate::extractor;
-use crate::metadata::LxeMetadata;
-use crate::payload::PayloadInfo;
 use crate::polkit;
+use lxe_common::metadata::LxeMetadata;
+use lxe_common::payload::PayloadInfo;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -44,7 +44,7 @@ impl InstallConfig {
     /// Create config for system-wide installation
     pub fn system() -> Self {
         Self {
-            base_dir: crate::paths::system::base_dir(),
+            base_dir: lxe_common::paths::system::base_dir(),
             is_system: true,
             create_desktop_entry: true,
             update_icon_cache: true,
@@ -128,16 +128,44 @@ pub async fn install_silent(
     handle.await
         .context("Extraction task failed")??;
     
-    // Create .desktop file
-    create_desktop_entry(&payload.metadata, &config).await?;
+    // Install lxe-runtime to bin directory for uninstall support
+    let runtime_path = install_runtime_binary(&config).await?;
+    
+    // Ensure ~/.local/bin is in user's PATH (first install only)
+    if let Err(e) = ensure_path_configured(&config).await {
+        tracing::warn!("Could not configure PATH: {}", e);
+        // Non-fatal - continue with installation
+    }
+    
+    // Create .desktop file (needs runtime_path for uninstall action)
+    let desktop_path = create_desktop_entry(&payload.metadata, &config, &runtime_path).await?;
     
     // Create symlink in bin directory
-    create_bin_symlink(&payload.metadata, &config).await?;
+    let symlink_path = create_bin_symlink(&payload.metadata, &config).await?;
     
     // Install icon
-    if payload.metadata.icon.is_some() {
-        install_icon(&payload.metadata, &config).await?;
+    let icon_path = if payload.metadata.icon.is_some() {
+        install_icon(&payload.metadata, &config).await?
+    } else {
+        None
+    };
+    
+    // Save manifest for tracking (enables clean uninstall)
+    let mut manifest = crate::manifest::InstallManifest::new(
+        payload.metadata.app_id.clone(),
+        Some(payload.metadata.name.clone()),
+        payload.metadata.version.clone(),
+        is_system,
+    );
+    manifest.add_file(&config.app_dir(&payload.metadata.app_id));
+    manifest.add_file(&desktop_path);
+    manifest.add_file(&symlink_path);
+    manifest.add_file(&runtime_path);
+    if let Some(ref icon) = icon_path {
+        manifest.add_file(icon);
     }
+    manifest.save().await
+        .context("Failed to save installation manifest")?;
     
     tracing::info!(
         "Successfully installed {} v{} to {:?}",
@@ -149,10 +177,124 @@ pub async fn install_silent(
     Ok(())
 }
 
+/// Install the runtime binary to the bin directory for persistent uninstall support
+/// Public alias: install_runtime_to_bin
+pub async fn install_runtime_binary(config: &InstallConfig) -> Result<PathBuf> {
+    let bin_dir = config.bin_dir();
+    fs::create_dir_all(&bin_dir).await?;
+    
+    let runtime_dest = bin_dir.join("lxe-runtime");
+    
+    // Only copy if not already present or if source is newer
+    let current_exe = std::env::current_exe()
+        .context("Failed to get current executable path")?;
+    
+    // Copy the runtime binary
+    // ALWAYS overwrite to ensure we have the latest version of the runtime
+    // This fixes issues where an old runtime doesn't support new flags (like --uninstall-gui)
+    fs::copy(&current_exe, &runtime_dest).await
+        .context("Failed to copy runtime binary to bin directory")?;
+    
+    // Make executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(&runtime_dest, perms)?;
+    }
+    
+    tracing::info!("Installed runtime to {:?}", runtime_dest);
+    
+    Ok(runtime_dest)
+}
+
+/// Alias for install_runtime_binary (used by GUI)
+pub async fn install_runtime_to_bin(config: &InstallConfig) -> Result<PathBuf> {
+    install_runtime_binary(config).await
+}
+
+/// Ensure ~/.local/bin is in the user's PATH
+/// 
+/// This automatically adds the PATH export to the user's shell config
+/// on first install, so they don't have to do it manually.
+/// 
+/// Returns true if shell config was modified (user needs to restart terminal)
+pub async fn ensure_path_configured(config: &InstallConfig) -> Result<bool> {
+    // Skip for system installs (system bins are already in PATH)
+    if config.is_system {
+        return Ok(false);
+    }
+    
+    let bin_dir = config.bin_dir();
+    let bin_str = bin_dir.display().to_string();
+    
+    // Check if already in PATH
+    if let Ok(path) = std::env::var("PATH") {
+        if path.split(':').any(|p| p == bin_str || p == "$HOME/.local/bin" || p.ends_with("/.local/bin")) {
+            tracing::debug!("~/.local/bin already in PATH");
+            return Ok(false);
+        }
+    }
+    
+    // Find shell config file
+    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?;
+    
+    let shell_configs = [
+        (".zshrc", "zsh"),
+        (".bashrc", "bash"),
+        (".profile", "sh"),
+    ];
+    
+    let path_export = r#"
+# Added by LXE installer - enables running LXE-installed apps from terminal
+export PATH="$HOME/.local/bin:$PATH"
+"#;
+    
+    for (config_file, shell_name) in shell_configs {
+        let config_path = home.join(config_file);
+        
+        if config_path.exists() {
+            // Check if we already added it
+            let contents = fs::read_to_string(&config_path).await
+                .unwrap_or_default();
+            
+            if contents.contains("/.local/bin") || contents.contains("Added by LXE") {
+                tracing::debug!("{} already configured", config_file);
+                return Ok(false);
+            }
+            
+            // Append to the config file
+            let mut file = fs::OpenOptions::new()
+                .append(true)
+                .open(&config_path)
+                .await
+                .context("Failed to open shell config")?;
+            
+            use tokio::io::AsyncWriteExt;
+            file.write_all(path_export.as_bytes()).await
+                .context("Failed to write to shell config")?;
+            
+            tracing::info!("Added ~/.local/bin to PATH in {} ({})", config_file, shell_name);
+            
+            return Ok(true);  // Modified shell config
+        }
+    }
+    
+    // No shell config found - create .profile as fallback
+    let profile_path = home.join(".profile");
+    fs::write(&profile_path, path_export).await
+        .context("Failed to create .profile")?;
+    
+    tracing::info!("Created ~/.profile with PATH configuration");
+    
+    Ok(true)  // Modified shell config
+}
+
 /// Create a .desktop file for the application
 pub async fn create_desktop_entry(
     metadata: &LxeMetadata,
     config: &InstallConfig,
+    runtime_path: &PathBuf,
 ) -> Result<PathBuf> {
     let desktop_dir = config.applications_dir();
     fs::create_dir_all(&desktop_dir).await?;
@@ -190,6 +332,11 @@ Categories={categories}
 StartupWMClass={wm_class}
 X-LXE-Version={version}
 X-LXE-AppId={app_id}
+Actions=Uninstall;
+
+[Desktop Action Uninstall]
+Name=Uninstall {name}
+Exec={runtime_path} --uninstall-gui {app_id}
 "#,
         name = metadata.name,
         comment = metadata.description.as_deref().unwrap_or(&metadata.name),
@@ -197,9 +344,13 @@ X-LXE-AppId={app_id}
         icon = icon_value,
         terminal = terminal,
         categories = metadata.categories_string(),
-        wm_class = metadata.app_id.split('.').last().unwrap_or(&metadata.name),
+        // Use custom wm_class if provided, otherwise derive from app_id
+        wm_class = metadata.wm_class.as_deref()
+            .unwrap_or_else(|| metadata.app_id.split('.').last().unwrap_or(&metadata.name)),
         version = metadata.version,
         app_id = metadata.app_id,
+        // Use the installed runtime path for uninstall action
+        runtime_path = runtime_path.display(),
     );
     
     fs::write(&desktop_path, content).await
@@ -327,7 +478,7 @@ pub async fn uninstall(
     app_id: &str,
     config: &InstallConfig,
 ) -> Result<()> {
-    use crate::paths::safety;
+    use lxe_common::paths::safety;
     
     // Check polkit for system uninstalls
     if config.is_system && !polkit::is_root() {
@@ -368,15 +519,28 @@ pub async fn uninstall(
             .context("Failed to remove .desktop file")?;
     }
     
-    // Remove bin symlink
-    let bin_link = config.bin_dir().join(app_id.rsplit('.').next().unwrap_or(app_id));
-    if bin_link.exists() || bin_link.is_symlink() {
-        tracing::info!("Removing bin symlink: {:?}", bin_link);
-        fs::remove_file(&bin_link).await.ok();
+    // Remove bin symlinks - find any symlinks pointing to this app's directory
+    let bin_dir = config.bin_dir();
+    if bin_dir.exists() {
+        let app_dir = config.app_dir(app_id);
+        if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if path.is_symlink() {
+                    // Check if this symlink points to our app directory
+                    if let Ok(target) = tokio::fs::read_link(&path).await {
+                        if target.starts_with(&app_dir) || target.to_string_lossy().contains(app_id) {
+                            tracing::info!("Removing bin symlink: {:?}", path);
+                            fs::remove_file(&path).await.ok();
+                        }
+                    }
+                }
+            }
+        }
     }
     
     // Remove icon (all sizes) - using paths module
-    for size in crate::paths::icons::SIZES {
+    for size in lxe_common::paths::icons::SIZES {
         let icon_dir = config.icons_dir().join(size).join("apps");
         for ext in ["svg", "png"] {
             let icon_path = icon_dir.join(format!("{}.{}", app_id, ext));

@@ -10,6 +10,7 @@ icon = "icon.png"
 description = "Code editing. Redefined."
 categories = ["Development", "IDE", "TextEditor"]
 terminal = false
+wm_class = "code"  # Lowercase for Wayland compatibility
 
 [build]
 input = "./dist"
@@ -23,3 +24,15 @@ cp VSCode-linux-x64/resources/app/resources/linux/code.png dist/icon.png
 
 # Lower compression for large Electron apps (faster build)
 compression = 10
+
+# Installer UI customization (NSIS-style)
+[installer]
+welcome_title = "Install Visual Studio Code"
+welcome_text = "The world's most popular code editor. Code smarter, not harder."
+finish_title = "You're all set!"
+finish_text = "VS Code is ready. Open it from your application menu or type 'code' in terminal."
+accent_color = "#007ACC"
+show_launch = true
+license = "LICENSE.txt"
+
+

@@ -142,11 +142,16 @@ impl CompletePage {
         // Add success styling via CSS
         icon.add_css_class("success");
         
-        // Title
+        // Get custom installer config
+        let installer = payload.as_ref().map(|p| &p.metadata.installer);
+        
+        // Title - use custom finish_title if provided
         let title = if is_uninstall {
             format!("{} Uninstalled", app_name)
         } else {
-            format!("{} Installed!", app_name)
+            installer
+                .and_then(|i| i.finish_title.clone())
+                .unwrap_or_else(|| format!("{} Installed!", app_name))
         };
         
         let title_label = gtk::Label::builder()
@@ -154,15 +159,17 @@ impl CompletePage {
             .css_classes(["title-1"])
             .build();
         
-        // Subtitle
+        // Subtitle - use custom finish_text if provided
         let subtitle = if is_uninstall {
-            "The application has been removed from your system."
+            "The application has been removed from your system.".to_string()
         } else {
-            "The application is ready to use."
+            installer
+                .and_then(|i| i.finish_text.clone())
+                .unwrap_or_else(|| "The application is ready to use.".to_string())
         };
         
         let subtitle_label = gtk::Label::builder()
-            .label(subtitle)
+            .label(&subtitle)
             .css_classes(["body"])
             .wrap(true)
             .justify(gtk::Justification::Center)
@@ -181,7 +188,10 @@ impl CompletePage {
             .margin_top(8)
             .build();
         
-        if !is_uninstall {
+        // Check if we should show launch button (default: true)
+        let show_launch = installer.map(|i| i.show_launch).unwrap_or(true);
+        
+        if !is_uninstall && show_launch {
             // Launch button
             let launch_button = gtk::Button::builder()
                 .label(&format!("Launch {}", app_name))

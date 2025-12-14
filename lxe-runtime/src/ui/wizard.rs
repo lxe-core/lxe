@@ -5,7 +5,7 @@
 
 use crate::payload::PayloadInfo;
 use crate::state::WizardMode;
-use crate::ui::pages::{CompletePage, MaintenancePage, ProgressPage, WelcomePage};
+use crate::ui::pages::{CompletePage, LicensePage, MaintenancePage, ProgressPage, WelcomePage};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::glib;
@@ -22,6 +22,7 @@ mod imp {
         
         // Page references
         pub welcome_page: RefCell<Option<WelcomePage>>,
+        pub license_page: RefCell<Option<LicensePage>>,
         pub progress_page: RefCell<Option<ProgressPage>>,
         pub complete_page: RefCell<Option<CompletePage>>,
         pub maintenance_page: RefCell<Option<MaintenancePage>>,
@@ -125,9 +126,24 @@ impl WizardStack {
     ) {
         let imp = self.imp();
         
-        // Welcome page
+        // Check if license page should be shown
+        let has_license = payload_info
+            .as_ref()
+            .and_then(|p| p.metadata.installer.license_text.as_ref())
+            .is_some();
+        
+        // Welcome page (always first)
         let welcome_page = WelcomePage::new(payload_info.clone());
         carousel.append(&welcome_page);
+        
+        // License page (only if license_text is present)
+        let license_page = if has_license {
+            let page = LicensePage::new(payload_info.clone());
+            carousel.append(&page);
+            Some(page)
+        } else {
+            None
+        };
         
         // Progress page
         let progress_page = ProgressPage::new(payload_info.clone());
@@ -137,16 +153,50 @@ impl WizardStack {
         let complete_page = CompletePage::new(payload_info.clone(), false);
         carousel.append(&complete_page);
         
-        // Connect welcome -> progress transition
-        welcome_page.connect_local(
-            "install-clicked",
-            false,
-            glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
-                carousel.scroll_to(&progress_page, true);
-                progress_page.start_installation();
-                None
-            }),
-        );
+        // Connect navigation based on whether license page exists
+        if let Some(ref license_pg) = license_page {
+            // Welcome -> License
+            welcome_page.connect_local(
+                "install-clicked",
+                false,
+                glib::clone!(@weak carousel, @weak license_pg as lp => @default-return None, move |_| {
+                    carousel.scroll_to(&lp, true);
+                    None
+                }),
+            );
+            
+            // License -> Progress (when accepted)
+            license_pg.connect_local(
+                "next-clicked",
+                false,
+                glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
+                    carousel.scroll_to(&progress_page, true);
+                    progress_page.start_installation();
+                    None
+                }),
+            );
+            
+            // License <- back to Welcome
+            license_pg.connect_local(
+                "back-clicked",
+                false,
+                glib::clone!(@weak carousel, @weak welcome_page => @default-return None, move |_| {
+                    carousel.scroll_to(&welcome_page, true);
+                    None
+                }),
+            );
+        } else {
+            // No license - Welcome -> Progress directly
+            welcome_page.connect_local(
+                "install-clicked",
+                false,
+                glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
+                    carousel.scroll_to(&progress_page, true);
+                    progress_page.start_installation();
+                    None
+                }),
+            );
+        }
         
         // Connect progress -> complete transition
         progress_page.connect_local(
@@ -157,6 +207,8 @@ impl WizardStack {
                 None
             }),
         );
+        
+        *imp.license_page.borrow_mut() = license_page;
         
         // Store page references
         *imp.welcome_page.borrow_mut() = Some(welcome_page);

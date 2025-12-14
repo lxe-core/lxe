@@ -72,10 +72,18 @@ pub struct LxeMetadata {
     /// Optional: Whether the app needs terminal
     #[serde(default)]
     pub terminal: bool,
+    
+    /// Optional: StartupWMClass for GNOME dock (default: derived from app ID)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wm_class: Option<String>,
 
     /// Optional: Custom installation hooks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hooks: Option<InstallHooks>,
+    
+    /// Optional: Installer UI customization
+    #[serde(default)]
+    pub installer: InstallerMetadata,
     
     // ========== Digital Signature Fields ==========
     
@@ -110,6 +118,59 @@ pub struct InstallHooks {
     pub post_uninstall: Option<String>,
 }
 
+/// Installer UI customization embedded in the package
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct InstallerMetadata {
+    /// Custom welcome page title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub welcome_title: Option<String>,
+    
+    /// Custom welcome page description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub welcome_text: Option<String>,
+    
+    /// Custom completion page title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_title: Option<String>,
+    
+    /// Custom completion page description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_text: Option<String>,
+    
+    /// Accent color in hex format (e.g., "#007ACC")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accent_color: Option<String>,
+    
+    /// Theme preference: "dark", "light", or "auto"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
+    
+    /// Show "Launch" button on completion page (default: true)
+    #[serde(default = "default_show_launch")]
+    pub show_launch: bool,
+    
+    // === ADVANCED BRANDING ===
+    /// License/EULA text content (embedded in package)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license_text: Option<String>,
+    
+    /// Banner image filename (embedded in payload)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub banner: Option<String>,
+    
+    /// Logo image filename (embedded in payload)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
+    
+    /// Allow user to choose custom install directory
+    #[serde(default)]
+    pub allow_custom_dir: bool,
+}
+
+fn default_show_launch() -> bool {
+    true
+}
+
 impl LxeMetadata {
     /// Create a new metadata instance with required fields
     pub fn new(
@@ -137,7 +198,9 @@ impl LxeMetadata {
             homepage: None,
             exec_args: None,
             terminal: false,
+            wm_class: None,
             hooks: None,
+            installer: InstallerMetadata::default(),
             public_key: None,
             signature: None,
         }

@@ -1,0 +1,49 @@
+[package]
+name = "lxe-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "LXE Runtime - GTK4/Libadwaita installer wizard"
+
+[[bin]]
+name = "lxe-runtime"
+path = "src/main.rs"
+
+[dependencies]
+lxe-common = { path = "../lxe-common" }
+clap.workspace = true
+
+# GUI
+gtk.workspace = true
+adw.workspace = true
+glib.workspace = true
+
+# Async
+tokio.workspace = true
+tokio-stream.workspace = true
+async-compression.workspace = true
+
+# D-Bus / Polkit
+zbus.workspace = true
+zbus_polkit.workspace = true
+
+# Shared deps
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+ruzstd.workspace = true
+tar.workspace = true
+dirs.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Secure temp directories
+tempfile = "3.10"
+
+# For library loading checks
+libc = "0.2"

@@ -20,8 +20,8 @@ mod imp {
         <?xml version="1.0" encoding="UTF-8"?>
         <interface>
             <template class="LxeWindow" parent="AdwApplicationWindow">
-                <property name="default-width">480</property>
-                <property name="default-height">400</property>
+                <property name="default-width">750</property>
+                <property name="default-height">450</property>
                 <property name="resizable">false</property>
                 <property name="decorated">false</property>
                 <style>

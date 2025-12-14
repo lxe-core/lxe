@@ -3,7 +3,7 @@
 //! Detects the current installation state and determines the wizard mode.
 //! This enables the "Maintenance Mode" for already-installed applications.
 
-use crate::metadata::LxeMetadata;
+use lxe_common::metadata::LxeMetadata;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 

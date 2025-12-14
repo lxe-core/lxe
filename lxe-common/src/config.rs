@@ -16,6 +16,62 @@ pub struct LxeConfig {
     pub runtime: RuntimeConfig,
     #[serde(default)]
     pub security: SecurityConfig,
+    #[serde(default)]
+    pub installer: InstallerConfig,
+}
+
+/// Installer UI customization options
+/// 
+/// All fields are optional - defaults are used if not specified.
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct InstallerConfig {
+    // === TEXT ===
+    /// Custom welcome page title (default: app name)
+    #[serde(default)]
+    pub welcome_title: Option<String>,
+    
+    /// Custom welcome page description
+    #[serde(default)]
+    pub welcome_text: Option<String>,
+    
+    /// Custom completion page title (default: "Installation Complete")
+    #[serde(default)]
+    pub finish_title: Option<String>,
+    
+    /// Custom completion page description
+    #[serde(default)]
+    pub finish_text: Option<String>,
+
+    // === THEMING ===
+    /// Accent color in hex format (e.g., "#007ACC")
+    #[serde(default)]
+    pub accent_color: Option<String>,
+    
+    /// Theme preference: "dark", "light", or "auto" (default: "auto")
+    #[serde(default)]
+    pub theme: Option<String>,
+
+    // === OPTIONS ===
+    /// Show "Launch" button on completion page (default: true)
+    #[serde(default)]
+    pub show_launch: Option<bool>,
+    
+    // === ADVANCED BRANDING ===
+    /// Path to license/EULA file (if present, shows license acceptance page)
+    #[serde(default)]
+    pub license: Option<String>,
+    
+    /// Path to banner image for left side panel (164×450 recommended)
+    #[serde(default)]
+    pub banner: Option<String>,
+    
+    /// Path to header logo image (48×48 recommended)
+    #[serde(default)]
+    pub logo: Option<String>,
+    
+    /// Allow user to choose custom install directory (default: false)
+    #[serde(default)]
+    pub allow_custom_dir: Option<bool>,
 }
 
 /// Package metadata
@@ -48,6 +104,11 @@ pub struct PackageConfig {
     /// Run in terminal (default: false)
     #[serde(default)]
     pub terminal: bool,
+    
+    /// StartupWMClass for GNOME dock integration (optional)
+    /// If not specified, derived from app ID
+    #[serde(default)]
+    pub wm_class: Option<String>,
 }
 
 /// Build configuration

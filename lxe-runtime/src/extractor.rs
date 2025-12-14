@@ -3,8 +3,8 @@
 //! Handles decompression and extraction of the zstd-compressed payload
 //! using async I/O to prevent UI blocking.
 
-use crate::metadata::LxeMetadata;
-use crate::payload::PayloadInfo;
+use lxe_common::metadata::LxeMetadata;
+use lxe_common::payload::PayloadInfo;
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -82,12 +82,13 @@ async fn extract_inner(
     fs::create_dir_all(&target_dir).await
         .context("Failed to create target directory")?;
     
-    // Create a temporary directory for extraction
-    let temp_dir = target_dir.join(".lxe-extracting");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).await?;
-    }
-    fs::create_dir_all(&temp_dir).await?;
+    // Create a secure temporary directory for extraction
+    // Uses tempfile crate to prevent TOCTOU attacks with cryptographically random names
+    let temp_dir = tempfile::Builder::new()
+        .prefix("lxe-extracting-")
+        .tempdir_in(&target_dir)
+        .context("Failed to create secure temporary directory")?;
+    let temp_path = temp_dir.path().to_path_buf();
     
     // Open the payload for reading
     let file = std::fs::File::open(&payload_info.exe_path)?;
@@ -111,7 +112,7 @@ async fn extract_inner(
         let _ = progress_tx.send(progress.clone());
         
         // Determine target path
-        let target_path = temp_dir.join(&path);
+        let target_path = temp_path.join(&path);
         
         // Create parent directories
         if let Some(parent) = target_path.parent() {
@@ -135,7 +136,7 @@ async fn extract_inner(
     }
     
     // Move temp to final
-    fs::rename(&temp_dir, &final_app_dir).await
+    fs::rename(&temp_path, &final_app_dir).await
         .context("Failed to move extracted files to final location")?;
     
     // Mark complete

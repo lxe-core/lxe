@@ -84,10 +84,15 @@ impl WelcomePage {
         }
         
         let (app_name, app_version, app_description) = if let Some(ref info) = *payload {
+            // Use custom installer text if provided, otherwise fall back to package metadata
+            let title = info.metadata.installer.welcome_title.clone()
+                .unwrap_or_else(|| info.metadata.name.clone());
+            let text = info.metadata.installer.welcome_text.clone()
+                .unwrap_or_else(|| info.metadata.description.clone().unwrap_or_default());
             (
-                info.metadata.name.clone(),
+                title,
                 info.metadata.version.clone(),
-                info.metadata.description.clone().unwrap_or_default(),
+                text,
             )
         } else {
             // Demo mode

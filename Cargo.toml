@@ -1,104 +1,66 @@
-[package]
-name = "lxe"
-version = "2.0.0"
+[workspace]
+resolver = "2"
+members = ["lxe-common", "lxe-cli", "lxe-runtime"]
+
+[workspace.package]
+version = "2.0.1"
 edition = "2021"
-description = "LXE - Linux Executable Environment: Modern self-extracting package format"
-authors = ["Arsh"]
 license = "MIT"
 repository = "https://github.com/lxe-core/lxe"
-keywords = ["linux", "package", "installer", "gtk4", "libadwaita"]
-categories = ["gui", "compression", "filesystem"]
+authors = ["Arsh"]
 
-[lib]
-name = "lxe"
-path = "src/lib.rs"
-
-[[bin]]
-name = "lxe-runtime"
-path = "src/main.rs"
-
-[[bin]]
-name = "lxe-pack"
-path = "src/bin/lxe_pack.rs"
-
-[[bin]]
-name = "lxe"
-path = "src/bin/lxe.rs"
-
-[dependencies]
-# Async Runtime
-tokio = { version = "1.40", features = ["rt-multi-thread", "fs", "sync", "io-util", "macros", "process"] }
-
-# GUI - GTK4 + Libadwaita
-# GUI - GTK4 + Libadwaita
-gtk = { package = "gtk4", version = "0.7", features = ["v4_10"] }
-adw = { package = "libadwaita", version = "0.5", features = ["v1_2"] }
-glib = "0.18"
-
-# Compression
-# Pure Rust decompression - no C compiler needed for runtime
-ruzstd = "0.7"
-# C-binding zstd for packer (faster, better ratio)
-zstd = { version = "0.13", optional = true }
-# Async streaming decompression
-async-compression = { version = "0.4", features = ["tokio", "zstd"] }
-
-# D-Bus / Polkit for privilege elevation
-zbus = "5.0"
-zbus_polkit = "5.0"
-
-# Serialization
+[workspace.dependencies]
+# Shared across all crates
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
 serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+thiserror = "2.0"
 
-# Cryptography
+# Crypto
 sha2 = "0.10"
 hex = "0.4"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 rand = "0.8"
 base64 = "0.22"
 
-# XDG Paths
+# Compression
+ruzstd = "0.7"
+zstd = "0.13"
+tar = "0.4"
+
+# Paths
 dirs = "6.0"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+indicatif = "0.17"
+self_update = { version = "0.39", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
+
+# Async (runtime only)
+tokio = { version = "1.40", features = ["rt-multi-thread", "fs", "sync", "io-util", "macros", "process"] }
+tokio-stream = "0.1"
+async-compression = { version = "0.4", features = ["tokio", "zstd"] }
+
+# D-Bus (runtime only)
+zbus = "5.0"
+zbus_polkit = "5.0"
+
+# GUI (runtime only)
+gtk = { package = "gtk4", version = "0.7", features = ["v4_10"] }
+adw = { package = "libadwaita", version = "0.5", features = ["v1_2"] }
+glib = "0.18"
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Error handling
-anyhow = "1.0"
-thiserror = "2.0"
-
-# CLI
-clap = { version = "4.5", features = ["derive"] }
-
-# Tar archive handling
-tar = "0.4"
-
-# Async channels for progress reporting
-tokio-stream = "0.1"
-
-# Terminal UI (progress bars)
-indicatif = "0.17"
-
-# Auto-updates
-self_update = { version = "0.39", default-features = false, features = [
-    "archive-tar",
-    "compression-flate2",
-    "rustls"
-] }
-
-[features]
-default = []
-packer = ["zstd"]
-
 [profile.release]
-opt-level = "z"      # Optimize for size
-lto = true           # Link-time optimization
-codegen-units = 1    # Single codegen unit for better optimization
-strip = true         # Strip symbols
-panic = "abort"      # Abort on panic (smaller binary)
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
 
 [profile.dev]
 opt-level = 0
