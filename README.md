@@ -1,50 +1,128 @@
-# LXE (Linux Executable Environment)
+# LXE
 
-Linux distribution is fragmented. Shipping an app that works on Ubuntu, Fedora, Arch, and Debian usually involves building `.deb`, `.rpm`, and generic tarballs, or forcing users to install massive runtimes like Flatpak.
+A packaging format for Linux that combines AppImage portability with proper installer experience.
 
-We built **LXE** to solve this. It's a new packaging format that combines the best parts of AppImage (portability) with the user experience of a native installer (MSI/DMG).
+## The Problem
 
-## What makes it different?
+Shipping an app on Linux means picking your poison: build multiple packages for different distros, or use AppImage (no menu entries, just a file sitting on the desktop). We wanted something that downloads as a single file but actually integrates with the system.
 
-Unlike an AppImage, which runs from a temporary mount and often fails to integrate with the desktop (missing icons, no start menu entry), an `.lxe` file is a **Self-Extracting Installer**.
+## What LXE Does
 
-When a user opens your file:
-1. It launches a native **GTK4 Setup Wizard**.
-2. It installs your app to the correct XDG location (`~/.local/share` or `/usr/share`).
-3. It creates standard menu entries, icons, and uninstallers.
-4. It works on *any* distribution.
+When you run a `.lxe` file, it launches a GTK4 setup wizard that:
+- Extracts your app to the proper XDG location
+- Creates desktop entries and menu shortcuts
+- Registers an uninstaller
+- Works on any distro with GTK4
 
-## For Developers
+The end user gets a familiar "install wizard" experience. You get one file that works everywhere.
 
-You don't need Docker, and you don't need to learn a complex spec file. LXE detects your project settings automatically.
+## Getting Started
 
-### 1. Install LXE
+### Install
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lxe-core/lxe/main/install.sh | bash
 lxe runtime download
 ```
 
-### 2. Initialize
-Run this in your project root (Rust, Python, Node, Go, etc.):
+### Create a Package
+
 ```bash
+# In your project root
 lxe init
-```
-This reads your `Cargo.toml`, `package.json`, or `setup.py` and creates a simple `lxe.toml`.
-
-### 3. Build using GitHub Actions (Recommended)
-Because `lxe-cli` is a static binary, you can use it in any CI pipeline without installing dependencies.
-
-```bash
+# Edit lxe.toml as needed
 lxe build
 ```
 
-This produces a single binary: `myapp_1.0.0_x64.lxe`.
+That produces `yourapp.lxe`. Double-click to install.
+
+### Example lxe.toml
+
+```toml
+[package]
+name = "My App"
+id = "com.example.myapp"
+version = "1.0.0"
+executable = "myapp"
+icon = "icon.png"
+description = "Does a thing"
+categories = ["Utility"]
+
+[build]
+input = "./dist"
+script = "cargo build --release && cp target/release/myapp dist/"
+```
+
+## Framework Presets
+
+If you're using Tauri, Electron, or PyInstaller, there are templates:
+
+```bash
+lxe init --preset tauri
+lxe init --preset electron
+lxe init --preset python
+```
+
+These preconfigure the build script and directory structure.
+
+## Package Signing
+
+```bash
+lxe key generate
+```
+
+Creates `lxe-signing.key`. Add it to your `lxe.toml`:
+
+```toml
+[build]
+signing_key = "lxe-signing.key"
+```
+
+Users can verify with `lxe verify package.lxe`.
+
+## CLI Reference
+
+```
+lxe init              Create lxe.toml (interactive)
+lxe build             Build the package
+lxe runtime download  Download the runtime stub
+lxe runtime status    Check if runtime is installed
+lxe key generate      Generate signing keypair
+lxe verify <file>     Verify package signature
+lxe uninstall <id>    Uninstall an app by ID
+lxe self-update       Update lxe itself
+```
+
+## How It Works
+
+A `.lxe` file is structured as:
+
+```
+[lxe-runtime binary] + [magic] + [metadata JSON] + [checksum] + [zstd payload] + [footer]
+```
+
+The runtime reads itself to find the footer, locates the metadata, and extracts the payload. No temp mounts, no FUSE required.
 
 ## Project Structure
 
-*   `lxe-cli`: The packer tool. Zero dependencies, runs on any CI runner.
-*   `lxe-runtime`: The installer stub. Uses system GTK4 libraries to draw the UI.
-*   `lxe-common`: Shared logic for metadata and signing.
+```
+lxe-cli/       CLI tool (static musl binary)
+lxe-runtime/   Installer stub (links GTK4/libadwaita)
+lxe-common/    Shared types and signing
+```
+
+## Using in CI
+
+`lxe` is a static binary, so you can download it in any CI environment:
+
+```yaml
+- name: Install LXE
+  run: |
+    curl -fsSL https://raw.githubusercontent.com/lxe-core/lxe/main/install.sh | bash
+    lxe runtime download
+    lxe build
+```
 
 ## License
+
 MIT
