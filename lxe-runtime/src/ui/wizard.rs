@@ -1,6 +1,6 @@
 //! Wizard Stack - Multi-page wizard with smooth transitions
 //!
-//! Uses AdwCarousel for beautiful page transitions and manages
+//! Uses GtkStack for clean page transitions and manages
 //! the wizard flow based on installation state.
 
 use crate::payload::PayloadInfo;
@@ -16,7 +16,7 @@ mod imp {
 
     #[derive(Default)]
     pub struct WizardStack {
-        pub carousel: RefCell<Option<adw::Carousel>>,
+        pub stack: RefCell<Option<gtk::Stack>>,
         pub payload_info: RefCell<Option<PayloadInfo>>,
         pub wizard_mode: RefCell<WizardMode>,
         
@@ -89,40 +89,31 @@ impl WizardStack {
         let wizard_mode = imp.wizard_mode.borrow().clone();
         let payload_info = imp.payload_info.borrow().clone();
         
-        // Create carousel for smooth page transitions
-        let carousel = adw::Carousel::builder()
-            .interactive(false) // Disable swipe - controlled programmatically
-            .allow_scroll_wheel(false)
-            .allow_mouse_drag(false)
+        // Create stack for clean page transitions
+        let stack = gtk::Stack::builder()
+            .transition_type(gtk::StackTransitionType::Crossfade)
+            .transition_duration(300)
             .vexpand(true)
             .hexpand(true)
             .build();
         
-        // Create carousel indicator dots
-        let dots = adw::CarouselIndicatorDots::builder()
-            .carousel(&carousel)
-            .halign(gtk::Align::Center)
-            .margin_top(12)
-            .build();
-        
         match wizard_mode {
             WizardMode::Install => {
-                self.setup_install_flow(&carousel, payload_info);
+                self.setup_install_flow(&stack, payload_info);
             }
             WizardMode::Maintenance { .. } => {
-                self.setup_maintenance_flow(&carousel, payload_info, wizard_mode);
+                self.setup_maintenance_flow(&stack, payload_info, wizard_mode);
             }
         }
         
-        self.append(&carousel);
-        self.append(&dots);
+        self.append(&stack);
         
-        *imp.carousel.borrow_mut() = Some(carousel);
+        *imp.stack.borrow_mut() = Some(stack);
     }
     
     fn setup_install_flow(
         &self,
-        carousel: &adw::Carousel,
+        stack: &gtk::Stack,
         payload_info: Option<PayloadInfo>,
     ) {
         let imp = self.imp();
@@ -135,12 +126,12 @@ impl WizardStack {
         
         // Welcome page (always first)
         let welcome_page = WelcomePage::new(payload_info.clone());
-        carousel.append(&welcome_page);
+        stack.add_named(&welcome_page, Some("welcome"));
         
         // License page (only if license_text is present)
         let license_page = if has_license {
             let page = LicensePage::new(payload_info.clone());
-            carousel.append(&page);
+            stack.add_named(&page, Some("license"));
             Some(page)
         } else {
             None
@@ -148,11 +139,11 @@ impl WizardStack {
         
         // Progress page
         let progress_page = ProgressPage::new(payload_info.clone());
-        carousel.append(&progress_page);
+        stack.add_named(&progress_page, Some("progress"));
         
         // Complete page
         let complete_page = CompletePage::new(payload_info.clone(), false);
-        carousel.append(&complete_page);
+        stack.add_named(&complete_page, Some("complete"));
         
         // Connect navigation based on whether license page exists
         if let Some(ref license_pg) = license_page {
@@ -160,8 +151,8 @@ impl WizardStack {
             welcome_page.connect_local(
                 "install-clicked",
                 false,
-                glib::clone!(@weak carousel, @weak license_pg as lp => @default-return None, move |_| {
-                    carousel.scroll_to(&lp, true);
+                glib::clone!(@weak stack, @weak license_pg as lp => @default-return None, move |_| {
+                    stack.set_visible_child(&lp);
                     None
                 }),
             );
@@ -170,12 +161,12 @@ impl WizardStack {
             license_pg.connect_local(
                 "next-clicked",
                 false,
-                glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
-                    carousel.scroll_to(&progress_page, true);
+                glib::clone!(@weak stack, @weak progress_page => @default-return None, move |_| {
+                    stack.set_visible_child(&progress_page);
                     
                     // Delay start to allow transition to complete/start smoothly
                     let page = progress_page.clone();
-                    glib::timeout_add_local(std::time::Duration::from_millis(600), move || {
+                    glib::timeout_add_local(std::time::Duration::from_millis(400), move || {
                         page.start_installation();
                         glib::ControlFlow::Break
                     });
@@ -188,8 +179,8 @@ impl WizardStack {
             license_pg.connect_local(
                 "back-clicked",
                 false,
-                glib::clone!(@weak carousel, @weak welcome_page => @default-return None, move |_| {
-                    carousel.scroll_to(&welcome_page, true);
+                glib::clone!(@weak stack, @weak welcome_page => @default-return None, move |_| {
+                    stack.set_visible_child(&welcome_page);
                     None
                 }),
             );
@@ -198,12 +189,12 @@ impl WizardStack {
             welcome_page.connect_local(
                 "install-clicked",
                 false,
-                glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |_| {
-                    carousel.scroll_to(&progress_page, true);
+                glib::clone!(@weak stack, @weak progress_page => @default-return None, move |_| {
+                    stack.set_visible_child(&progress_page);
                     
                     // Delay start to allow transition to complete/start smoothly
                     let page = progress_page.clone();
-                    glib::timeout_add_local(std::time::Duration::from_millis(600), move || {
+                    glib::timeout_add_local(std::time::Duration::from_millis(400), move || {
                         page.start_installation();
                         glib::ControlFlow::Break
                     });
@@ -217,8 +208,8 @@ impl WizardStack {
         progress_page.connect_local(
             "extraction-complete",
             false,
-            glib::clone!(@weak carousel, @weak complete_page => @default-return None, move |_| {
-                carousel.scroll_to(&complete_page, true);
+            glib::clone!(@weak stack, @weak complete_page => @default-return None, move |_| {
+                stack.set_visible_child(&complete_page);
                 None
             }),
         );
@@ -233,7 +224,7 @@ impl WizardStack {
     
     fn setup_maintenance_flow(
         &self,
-        carousel: &adw::Carousel,
+        stack: &gtk::Stack,
         payload_info: Option<PayloadInfo>,
         wizard_mode: WizardMode,
     ) {
@@ -241,25 +232,25 @@ impl WizardStack {
         
         // Maintenance page (uninstall/repair/upgrade options)
         let maintenance_page = MaintenancePage::new(payload_info.clone(), wizard_mode.clone());
-        carousel.append(&maintenance_page);
+        stack.add_named(&maintenance_page, Some("maintenance"));
         
         // Progress page (for uninstall/repair operations)
         let progress_page = ProgressPage::new(payload_info.clone());
-        carousel.append(&progress_page);
+        stack.add_named(&progress_page, Some("progress"));
         
         // Complete page
         let is_uninstall = true; // Will be determined by action
         let complete_page = CompletePage::new(payload_info, is_uninstall);
-        carousel.append(&complete_page);
+        stack.add_named(&complete_page, Some("complete"));
         
         // Connect maintenance actions
         maintenance_page.connect_local(
             "action-selected",
             false,
-            glib::clone!(@weak carousel, @weak progress_page => @default-return None, move |values: &[glib::Value]| {
+            glib::clone!(@weak stack, @weak progress_page => @default-return None, move |values: &[glib::Value]| {
                 let action = values[1].get::<String>().unwrap_or_default();
                 
-                carousel.scroll_to(&progress_page, true);
+                stack.set_visible_child(&progress_page);
                 
                 match action.as_str() {
                     "uninstall" => progress_page.start_uninstallation(),
@@ -274,8 +265,8 @@ impl WizardStack {
         progress_page.connect_local(
             "extraction-complete",
             false,
-            glib::clone!(@weak carousel, @weak complete_page => @default-return None, move |_| {
-                carousel.scroll_to(&complete_page, true);
+            glib::clone!(@weak stack, @weak complete_page => @default-return None, move |_| {
+                stack.set_visible_child(&complete_page);
                 None
             }),
         );
@@ -285,11 +276,10 @@ impl WizardStack {
         *imp.complete_page.borrow_mut() = Some(complete_page);
     }
     
-    /// Navigate to a specific page by index
-    pub fn go_to_page(&self, index: u32) {
-        if let Some(ref carousel) = *self.imp().carousel.borrow() {
-            let page = carousel.nth_page(index);
-            carousel.scroll_to(&page, true);
+    /// Navigate to a specific page by name
+    pub fn go_to_page(&self, name: &str) {
+        if let Some(ref stack) = *self.imp().stack.borrow() {
+            stack.set_visible_child_name(name);
         }
     }
 }
