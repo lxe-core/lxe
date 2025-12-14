@@ -1,8 +1,8 @@
 # LXE Runtime Bundler
 # Builds lxe-runtime with bundled glibc and GTK4 libraries
-# Based on Debian Bullseye for maximum compatibility (glibc 2.31)
+# Based on Debian Bookworm for GTK4/Libadwaita support (glibc 2.36)
 
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
