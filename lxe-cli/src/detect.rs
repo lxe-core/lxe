@@ -172,7 +172,7 @@ fn detect_from_tauri_cargo(dir: &Path) -> Option<DetectedProject> {
         version: package.get("version").and_then(|v| v.as_str()).map(String::from),
         description: package.get("description").and_then(|v| v.as_str()).map(String::from),
         executable: Some(name.to_string()),
-        icon: detect_tauri_icon(dir),
+        icon: Some("icon.png".to_string()),
         build_script: Some(format!(r#"rm -rf dist && mkdir -p dist && \
 cp src-tauri/target/release/{} dist/ && \
 if [ -f src-tauri/binaries/server-x86_64-unknown-linux-gnu ]; then \
@@ -334,7 +334,7 @@ fn detect_from_electron_builder(dir: &Path) -> Option<DetectedProject> {
                         version: None,
                         description: None,
                         executable: app_id.as_ref().and_then(|id| id.split('.').last()).map(String::from),
-                        icon: None,
+                        icon: Some("icon.png".to_string()),
                         build_script: Some(r#"rm -rf dist && \
 cp -r release/linux-unpacked dist && \
 cp build/icon.png dist/ 2>/dev/null || echo "No icon""#.to_string()),
@@ -383,7 +383,7 @@ fn detect_from_tauri_conf(dir: &Path) -> Option<DetectedProject> {
                             version,
                             description: None,
                             executable: identifier.as_ref().and_then(|id| id.split('.').last()).map(String::from),
-                            icon: detect_tauri_icon(dir),
+                            icon: Some("icon.png".to_string()),
                             // NOTE: This is detected from tauri.conf.json, so we try to provide a generic build script
                             // but tauri cargo detection is preferred/better
                             build_script: name.as_ref().map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
@@ -428,7 +428,7 @@ fn detect_from_pyproject(dir: &Path) -> Option<DetectedProject> {
         version: project.get("version").and_then(|v| v.as_str()).map(String::from),
         description: project.get("description").and_then(|v| v.as_str()).map(String::from),
         executable: project.get("name").and_then(|v| v.as_str()).map(String::from),
-        icon: None,
+        icon: Some("icon.png".to_string()),
         build_script: project.get("name").and_then(|v| v.as_str()).map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
 python3 -m venv venv 2>/dev/null || true && \
 source venv/bin/activate && \
@@ -483,7 +483,7 @@ fn detect_from_setup_py(dir: &Path) -> Option<DetectedProject> {
             version,
             description,
             executable: None,
-            icon: None,
+            icon: Some("icon.png".to_string()),
             build_script: name.as_ref().map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
 python3 -m venv venv 2>/dev/null || true && \
 source venv/bin/activate && \
@@ -539,7 +539,7 @@ fn detect_from_setup_cfg(dir: &Path) -> Option<DetectedProject> {
             version,
             description,
             executable: None,
-            icon: None,
+            icon: Some("icon.png".to_string()),
             build_script: name.as_ref().map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
 python3 -m venv venv 2>/dev/null || true && \
 source venv/bin/activate && \
