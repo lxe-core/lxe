@@ -109,6 +109,14 @@ pub struct PackageConfig {
     /// If not specified, derived from app ID
     #[serde(default)]
     pub wm_class: Option<String>,
+
+    /// DEPRECATED: License file should be in [installer] section
+    #[serde(default)]
+    pub license: Option<String>,
+    
+    /// Authors (optional metadata)
+    #[serde(default)]
+    pub authors: Vec<String>,
 }
 
 /// Build configuration
@@ -279,6 +287,22 @@ impl LxeConfig {
             }
         }
         
+        // DEPRECATED FIELD CHECKS
+        if let Some(ref license) = self.package.license {
+             anyhow::bail!(
+                "❌ Misplaced configuration: 'license'\n\n\
+                 The 'license' key was found in the [package] section, but it belongs in [installer].\n\
+                 This is why your license agreement page might be missing!\n\n\
+                 To fix this, move it to the [installer] section:\n\n\
+                 [package]\n\
+                 name = \"...\"\n\
+                 ...\n\n\
+                 [installer]\n\
+                 license = \"{}\"\n",
+                license
+            );
+        }
+        
         Ok(())
     }
 }
@@ -314,6 +338,11 @@ compression = 19
 [runtime]
 # Optional: Path to custom LXE runtime
 # path = "./lxe-runtime"
+
+[installer]
+# Optional: Show license agreement
+# license = "LICENSE" # Must be in [installer], NOT [package]!
+# theme = "auto"      # "light", "dark", or "auto"
 
 [security]
 # Optional: Path to Ed25519 signing key

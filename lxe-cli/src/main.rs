@@ -532,8 +532,31 @@ fn cmd_init(accept_defaults: bool, preset: Option<&str>, console: &Console) -> R
     
     // Build configuration
     let build_input = detected.build_input.unwrap_or_else(|| "./dist".to_string());
-    let build_script_str = if let Some(script) = detected.build_script {
-        format!("script = \"\"\"\n{}\n\"\"\"", script)
+    
+    let build_script_line = if let Some(script) = detected.build_script {
+        let script_path = std::env::current_dir()?.join("lxe-build.sh");
+        
+        let mut f = File::create(&script_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = f.metadata()?.permissions();
+            perms.set_mode(0o755);
+            f.set_permissions(perms)?;
+        }
+        
+        // Add shebang if missing
+        let content = if script.starts_with("#!") {
+            script
+        } else {
+            format!("#!/bin/bash\n{}", script)
+        };
+        
+        f.write_all(content.as_bytes())?;
+        
+        console.success(format!("Created build script: {}", "lxe-build.sh"));
+        
+        "script = \"./lxe-build.sh\"".to_string()
     } else {
         "# script = \"your build command here\"".to_string()
     };
@@ -564,7 +587,7 @@ compression = 19
         icon = icon,
         description = description,
         input = build_input,
-        build_script = build_script_str,
+        build_script = build_script_line,
     );
     
     // Show preview and confirm (unless -y flag)
@@ -579,6 +602,10 @@ compression = 19
         
         if !confirm {
             console.log("Cancelled.");
+            // Clean up created script if cancelled
+            if fs::exists("lxe-build.sh")? {
+                fs::remove_file("lxe-build.sh")?;
+            }
             return Ok(());
         }
     }
@@ -587,7 +614,7 @@ compression = 19
     
     console.success("Created lxe.toml");
     console.log("\nNext steps:");
-    console.log("  1. Put your app files in ./dist/");
+    console.log("  1. Review lxe-build.sh (if applicable)");
     console.log("  2. Run: lxe build");
     
     Ok(())
@@ -713,6 +740,10 @@ description = "A Tauri desktop application"
 categories = ["Utility"]
 terminal = false
 
+[installer]
+# Optional: License agreement
+# license = "LICENSE"
+
 [build]
 input = "./dist"
 
@@ -745,6 +776,10 @@ description = "A Python application"
 categories = ["Utility"]
 terminal = false
 
+[installer]
+# Optional: License agreement
+# license = "LICENSE"
+
 [build]
 input = "./dist"
 
@@ -772,6 +807,10 @@ icon = "icon.png"
 description = "An Electron application"
 categories = ["Utility"]
 terminal = false
+
+[installer]
+# Optional: License agreement
+# license = "LICENSE"
 
 [build]
 input = "./dist"
