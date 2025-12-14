@@ -2,6 +2,8 @@
 resolver = "2"
 members = ["lxe-common", "lxe-cli", "lxe-runtime"]
 
+exclude = ["Velocity_GUI", "demo-app"]
+
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
@@ -47,8 +49,8 @@ zbus = "5.0"
 zbus_polkit = "5.0"
 
 # GUI (runtime only)
-gtk = { package = "gtk4", version = "0.7", features = ["v4_10"] }
-adw = { package = "libadwaita", version = "0.5", features = ["v1_2"] }
+gtk = { package = "gtk4", version = "0.7", features = ["v4_6"] }
+adw = { package = "libadwaita", version = "0.5", features = ["v1_1"] }
 glib = "0.18"
 
 # Logging

@@ -1,8 +1,8 @@
 # LXE Runtime Bundler
 # Builds lxe-runtime with bundled glibc and GTK4 libraries
-# Based on Ubuntu 24.04 for GTK 4.14+ support (glibc 2.39)
+# Based on Ubuntu 22.04 for better compatibility (glibc 2.35)
 
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
