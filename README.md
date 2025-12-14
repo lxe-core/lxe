@@ -1,93 +1,50 @@
 # LXE (Linux Executable Environment)
 
-> **Universal Package Format for Linux**
->
-> Bridge the gap between portable apps and native installers.
+Linux distribution is fragmented. Shipping an app that works on Ubuntu, Fedora, Arch, and Debian usually involves building `.deb`, `.rpm`, and generic tarballs, or forcing users to install massive runtimes like Flatpak.
 
-LXE combines the portability of AppImage with the user experience of a native installer. It produces a single `.lxe` binary that, when run, launches a **GTK4 / Libadwaita** installation wizard to correctly install the application to the user's system (`~/.local/share` or `/usr/share`).
+We built **LXE** to solve this. It's a new packaging format that combines the best parts of AppImage (portability) with the user experience of a native installer (MSI/DMG).
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/lxe-core/lxe/release.yml?style=flat-square)
-![License](https://img.shields.io/crates/l/lxe?style=flat-square)
-![Version](https://img.shields.io/crates/v/lxe?style=flat-square)
+## What makes it different?
 
----
+Unlike an AppImage, which runs from a temporary mount and often fails to integrate with the desktop (missing icons, no start menu entry), an `.lxe` file is a **Self-Extracting Installer**.
 
-## ⚡ Features
+When a user opens your file:
+1. It launches a native **GTK4 Setup Wizard**.
+2. It installs your app to the correct XDG location (`~/.local/share` or `/usr/share`).
+3. It creates standard menu entries, icons, and uninstallers.
+4. It works on *any* distribution.
 
-*   **Single-File Distribution**: Ship one atomic binary (`myapp.lxe`).
-*   **Native Installer Wizard**: Provides a familiar, polished setup experience using GTK4.
-*   **System Integration**: Automatically handles `.desktop` files, icons, mime-types, and symlinks.
-*   **Integrated Uninstaller**: Right-click "Uninstall" support out of the box.
-*   **Zero Dependencies**: The packer (`lxe-cli`) is a static binary that runs on any CI/CD (GitHub Actions, GitLab) without setup.
-*   **Auto-Detection**: `lxe init` scans `Cargo.toml`, `package.json`, or `setup.py` to auto-configure.
-*   **Secure**: Built-in Ed25519 signing and verification.
+## For Developers
 
----
+You don't need Docker, and you don't need to learn a complex spec file. LXE detects your project settings automatically.
 
-## 🚀 Installation
-
-### 1. Install CLI
-Install the static binary to your system (requires `curl` and `bash`).
-
+### 1. Install LXE
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lxe-core/lxe/main/install.sh | bash
-```
-
-### 2. Download Runtime
-Fetch the runtime binary (required for building packages).
-
-```bash
 lxe runtime download
 ```
 
----
-
-## 🛠️ Usage
-
-### Initialize Project
-Run this in your project root (works with Rust, Python, Node, Go, etc.).
-
+### 2. Initialize
+Run this in your project root (Rust, Python, Node, Go, etc.):
 ```bash
 lxe init
 ```
+This reads your `Cargo.toml`, `package.json`, or `setup.py` and creates a simple `lxe.toml`.
 
-This generates an `lxe.toml` configuration file based on your project metadata.
-
-### Build Package
-After building your application (e.g., `cargo build --release` or `npm run build`), run:
+### 3. Build using GitHub Actions (Recommended)
+Because `lxe-cli` is a static binary, you can use it in any CI pipeline without installing dependencies.
 
 ```bash
 lxe build
 ```
 
-This acts as a packer, compressing your application (Zstd Level 19) and embedding it into the `.lxe` installer.
+This produces a single binary: `myapp_1.0.0_x64.lxe`.
 
----
+## Project Structure
 
-## 📦 Architecture
+*   `lxe-cli`: The packer tool. Zero dependencies, runs on any CI runner.
+*   `lxe-runtime`: The installer stub. Uses system GTK4 libraries to draw the UI.
+*   `lxe-common`: Shared logic for metadata and signing.
 
-LXE consists of two main components:
-
-1.  **lxe-cli** (The Packer): A static Rust binary used by developers to create packages.
-2.  **lxe-runtime** (The Installer): A dynamic Rust binary (linked to GTK4) embedded inside every `.lxe` file. It handles the self-extraction and UI logic.
-
-For a detailed comparison with AppImage, Flatpak, and Snap, see [docs/COMPARISON.md](docs/COMPARISON.md).
-
----
-
-## 🔒 Security
-
-Sign your packages using Ed25519 keys to prevent tampering.
-
-```bash
-# Generate keypair
-lxe key generate
-
-# Build signed package
-lxe build --sign lxe-signing.key
-```
-
----
-
-## 📄 License
-MIT or Apache-2.0
+## License
+MIT

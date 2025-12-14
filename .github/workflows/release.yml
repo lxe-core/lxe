@@ -50,7 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-musl
-      - run: sudo apt-get install -y musl-tools
+      - run: sudo apt-get install -y musl-tools pkg-config libssl-dev
       - run: cargo build --release -p lxe-cli --target x86_64-unknown-linux-musl
       - run: mv target/x86_64-unknown-linux-musl/release/lxe lxe-x86_64-linux-musl
       - run: tar -czvf lxe-x86_64-linux-musl.tar.gz lxe-x86_64-linux-musl
