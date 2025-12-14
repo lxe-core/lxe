@@ -14,6 +14,8 @@ pub struct DetectedProject {
     pub description: Option<String>,
     pub executable: Option<String>,
     pub icon: Option<String>,
+    pub build_script: Option<String>,
+    pub build_input: Option<String>,
 }
 
 impl DetectedProject {
@@ -98,6 +100,8 @@ impl DetectedProject {
         if self.description.is_none() { self.description = other.description; }
         if self.executable.is_none() { self.executable = other.executable; }
         if self.icon.is_none() { self.icon = other.icon; }
+        if self.build_script.is_none() { self.build_script = other.build_script; }
+        if self.build_input.is_none() { self.build_input = other.build_input; }
     }
     
     /// Check if detection found anything meaningful
@@ -169,6 +173,15 @@ fn detect_from_tauri_cargo(dir: &Path) -> Option<DetectedProject> {
         description: package.get("description").and_then(|v| v.as_str()).map(String::from),
         executable: Some(name.to_string()),
         icon: detect_tauri_icon(dir),
+        build_script: Some(format!(r#"rm -rf dist && mkdir -p dist && \
+cp src-tauri/target/release/{} dist/ && \
+if [ -f src-tauri/binaries/server-x86_64-unknown-linux-gnu ]; then \
+    cp src-tauri/binaries/server-x86_64-unknown-linux-gnu dist/server && \
+    chmod +x dist/server; \
+fi && \
+cp src-tauri/icons/128x128.png dist/icon.png 2>/dev/null || \
+cp src-tauri/icons/icon.png dist/icon.png 2>/dev/null || echo "No icon""#, name)),
+        build_input: Some("./dist".to_string()),
     })
 }
 
@@ -187,6 +200,8 @@ fn detect_from_cargo_toml(dir: &Path) -> Option<DetectedProject> {
         description: package.get("description").and_then(|v| v.as_str()).map(String::from),
         executable: package.get("name").and_then(|v| v.as_str()).map(String::from),
         icon: None,
+        build_script: None,
+        build_input: None,
     })
 }
 
@@ -207,6 +222,8 @@ fn detect_from_package_json(dir: &Path) -> Option<DetectedProject> {
         description: json.get("description").and_then(|v| v.as_str()).map(String::from),
         executable: Some(name.to_string()),
         icon: None,
+        build_script: None,
+        build_input: None,
     })
 }
 
@@ -268,6 +285,8 @@ fn detect_from_monorepo(dir: &Path) -> Option<DetectedProject> {
                             description: description.map(String::from),
                             executable: name.map(String::from),
                             icon: None,
+                            build_script: None,
+                            build_input: None,
                         });
                     }
                 }
@@ -316,6 +335,10 @@ fn detect_from_electron_builder(dir: &Path) -> Option<DetectedProject> {
                         description: None,
                         executable: app_id.as_ref().and_then(|id| id.split('.').last()).map(String::from),
                         icon: None,
+                        build_script: Some(r#"rm -rf dist && \
+cp -r release/linux-unpacked dist && \
+cp build/icon.png dist/ 2>/dev/null || echo "No icon""#.to_string()),
+                        build_input: Some("./dist".to_string()),
                     });
                 }
             }
@@ -356,11 +379,17 @@ fn detect_from_tauri_conf(dir: &Path) -> Option<DetectedProject> {
                     
                     if name.is_some() || version.is_some() {
                         return Some(DetectedProject {
-                            name,
+                            name: name.clone(),
                             version,
                             description: None,
                             executable: identifier.as_ref().and_then(|id| id.split('.').last()).map(String::from),
                             icon: detect_tauri_icon(dir),
+                            // NOTE: This is detected from tauri.conf.json, so we try to provide a generic build script
+                            // but tauri cargo detection is preferred/better
+                            build_script: name.as_ref().map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
+cp src-tauri/target/release/{} dist/ && \
+cp src-tauri/icons/128x128.png dist/icon.png 2>/dev/null || echo "No icon""#, n)),
+                            build_input: Some("./dist".to_string()),
                         });
                     }
                 }
@@ -400,6 +429,14 @@ fn detect_from_pyproject(dir: &Path) -> Option<DetectedProject> {
         description: project.get("description").and_then(|v| v.as_str()).map(String::from),
         executable: project.get("name").and_then(|v| v.as_str()).map(String::from),
         icon: None,
+        build_script: project.get("name").and_then(|v| v.as_str()).map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
+python3 -m venv venv 2>/dev/null || true && \
+source venv/bin/activate && \
+pip install -q pyinstaller && \
+pip install -q -r requirements.txt 2>/dev/null || true && \
+pyinstaller --onefile --name {} --clean main.py --distpath dist && \
+cp icon.png dist/ 2>/dev/null || echo "No icon""#, n)),
+        build_input: Some("./dist".to_string()),
     })
 }
 
@@ -442,11 +479,19 @@ fn detect_from_setup_py(dir: &Path) -> Option<DetectedProject> {
     
     if name.is_some() || version.is_some() {
         Some(DetectedProject {
-            name: name.map(|s| to_title_case(&s)),
+            name: name.clone().map(|s| to_title_case(&s)),
             version,
             description,
             executable: None,
             icon: None,
+            build_script: name.as_ref().map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
+python3 -m venv venv 2>/dev/null || true && \
+source venv/bin/activate && \
+pip install -q pyinstaller && \
+pip install -q -r requirements.txt 2>/dev/null || true && \
+pyinstaller --onefile --name {} --clean main.py --distpath dist && \
+cp icon.png dist/ 2>/dev/null || echo "No icon""#, n)),
+            build_input: Some("./dist".to_string()),
         })
     } else {
         None
@@ -490,11 +535,19 @@ fn detect_from_setup_cfg(dir: &Path) -> Option<DetectedProject> {
     
     if name.is_some() || version.is_some() {
         Some(DetectedProject {
-            name: name.map(|s| to_title_case(&s)),
+            name: name.clone().map(|s| to_title_case(&s)),
             version,
             description,
             executable: None,
             icon: None,
+            build_script: name.as_ref().map(|n| format!(r#"rm -rf dist && mkdir -p dist && \
+python3 -m venv venv 2>/dev/null || true && \
+source venv/bin/activate && \
+pip install -q pyinstaller && \
+pip install -q -r requirements.txt 2>/dev/null || true && \
+pyinstaller --onefile --name {} --clean main.py --distpath dist && \
+cp icon.png dist/ 2>/dev/null || echo "No icon""#, n)),
+            build_input: Some("./dist".to_string()),
         })
     } else {
         None

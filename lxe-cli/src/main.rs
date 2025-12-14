@@ -18,7 +18,7 @@ use std::process::Command;
 use indicatif::{ProgressBar, ProgressStyle};
 
 // Import from lxe-common
-use lxe_common::config::{LxeConfig, generate_template};
+use lxe_common::config::LxeConfig;
 use lxe_common::metadata::SignableMetadata;
 
 // Re-use signing and compression
@@ -530,6 +530,14 @@ fn cmd_init(accept_defaults: bool, preset: Option<&str>, console: &Console) -> R
             .interact_text()?
     };
     
+    // Build configuration
+    let build_input = detected.build_input.unwrap_or_else(|| "./dist".to_string());
+    let build_script_str = if let Some(script) = detected.build_script {
+        format!("script = \"\"\"\n{}\n\"\"\"", script)
+    } else {
+        "# script = \"your build command here\"".to_string()
+    };
+
     // Generate config content
     let config_content = format!(
         r#"# LXE Package Configuration
@@ -545,8 +553,8 @@ categories = ["Utility"]
 terminal = false
 
 [build]
-input = "./dist"
-# script = "your build command here"
+input = "{input}"
+{build_script}
 compression = 19
 "#,
         name = name,
@@ -555,6 +563,8 @@ compression = 19
         executable = executable,
         icon = icon,
         description = description,
+        input = build_input,
+        build_script = build_script_str,
     );
     
     // Show preview and confirm (unless -y flag)
