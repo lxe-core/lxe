@@ -105,13 +105,13 @@ jobs:
         run: |
           cd release
           chmod +x lxe bundled/lxe-runtime bundled/run-lxe-runtime.sh
-          tar -czvf lxe-${{ github.ref_name }}-x86_64-linux.tar.gz lxe
-          tar -czvf lxe-runtime-bundled-${{ github.ref_name }}-x86_64-linux.tar.gz bundled/
+          tar -czvf lxe-x86_64-linux-musl.tar.gz lxe
+          tar -czvf lxe-runtime-bundled-x86_64-linux.tar.gz bundled/
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            release/lxe-${{ github.ref_name }}-x86_64-linux.tar.gz
-            release/lxe-runtime-bundled-${{ github.ref_name }}-x86_64-linux.tar.gz
+            release/lxe-x86_64-linux-musl.tar.gz
+            release/lxe-runtime-bundled-x86_64-linux.tar.gz
           generate_release_notes: true
